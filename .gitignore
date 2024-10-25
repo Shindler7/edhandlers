@@ -1,0 +1,10 @@
+__pypackages__/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# PyCharm
+.idea/
+
+# Sphinx documentation
+docs/_build/
