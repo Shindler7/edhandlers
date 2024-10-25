@@ -1,10 +1,8 @@
-from typing import List
-
 from setuptools import setup, find_packages
 
 
-def load_requirements(file_name) -> List[str]:
-    with open(file_name, 'r') as file:
+def load_requirements(file_name) -> list[str]:
+    with open(file_name, 'r', encoding='utf-8') as file:
         return file.read().splitlines()
 
 
