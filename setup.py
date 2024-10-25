@@ -7,7 +7,7 @@ def load_requirements(file_name) -> list[str]:
 
 
 setup(
-    name='ehandler',
+    name='edhandlers',
     version='0.2b',
     packages=find_packages(),
     install_requires=load_requirements('requirements.txt'),
