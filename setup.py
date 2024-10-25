@@ -9,7 +9,7 @@ def load_requirements(file_name) -> List[str]:
 
 
 setup(
-    name='toolbar',
+    name='ehandler',
     version='0.1b',
     packages=find_packages(),
     install_requires=load_requirements('requirements.txt'),
