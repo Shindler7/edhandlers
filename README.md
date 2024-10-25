@@ -15,8 +15,8 @@
 
 ```python3
 from ehandler.decorators.except_handlers import err_interceptor
-from ehandler.decorators.except_handlers import err_log_and_return
-from ehandler.decorators.except_handlers import raise_if_return
+# from ehandler.decorators.except_handlers import err_log_and_return
+# from ehandler.decorators.except_handlers import raise_if_return
 
 @err_interceptor()
 def a():
@@ -50,6 +50,7 @@ logger = logging.Logger(__name__)
 def a(data: Dict[str, str]):
     try:
         result: str = data['result']
+        print(result)
     except KeyError as err:
         intercept_err_and_log(err, log_obj=logger, source_func=a)        
 ```

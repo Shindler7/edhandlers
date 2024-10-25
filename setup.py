@@ -1,8 +1,8 @@
-from setuptools import setup, find_packages
+﻿from setuptools import setup, find_packages
 
 
 def load_requirements(file_name) -> list[str]:
-    with open(file_name, 'r', encoding='utf-8') as file:
+    with open(file_name, 'r') as file:
         return file.read().splitlines()
 
 
@@ -11,9 +11,9 @@ setup(
     version='0.1b',
     packages=find_packages(),
     install_requires=load_requirements('requirements.txt'),
-    author='Schindler7',
-    author_email='proartos@gmail.com',
-    description='Коллекция обработчиков исключений',
+    author='Vlad Barmichev',
+    author_email='barmichev@gmail.com',
+    description='Collection of exception handlers',
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
     url='https://github.com/Shindler7/ehandler',
@@ -24,3 +24,4 @@ setup(
     ],
     python_requires='>=3.10',
 )
+
