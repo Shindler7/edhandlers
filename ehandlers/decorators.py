@@ -7,8 +7,8 @@ import logging
 from logging import Logger
 from typing import Union, Type, Tuple, Callable
 
-from ehandler.except_handlers.accessories import is_pure_exc_class
-from ehandler.except_handlers.interfaces import intercept_err_and_log, log_err
+from .except_handlers.accessories import is_pure_exc_class
+from .except_handlers.interfaces import intercept_err_and_log, log_err
 
 
 def err_interceptor(err_raise: Union[Exception, Type[Exception]] = None,
