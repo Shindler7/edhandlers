@@ -7,8 +7,8 @@ import logging
 from logging import Logger
 from typing import Union, Type, Tuple, Callable
 
-from .except_handlers.accessories import is_pure_exc_class
-from .except_handlers.interfaces import intercept_err_and_log, log_err
+from .except_handlers.tools import is_exc_type
+from .except_handlers.handlers import intercept_err_and_log, log_err
 
 
 def err_interceptor(err_raise: Union[Exception, Type[Exception]] = None,
@@ -130,7 +130,7 @@ def raise_if_return(*,
                 return result
 
             err = exception
-            if is_pure_exc_class(exception):
+            if is_exc_type(exception):
                 err_msg = get_err_msg(result, err_msg_annotate)
                 err = err(err_msg)
 

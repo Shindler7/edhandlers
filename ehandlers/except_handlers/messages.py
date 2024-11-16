@@ -1,23 +1,9 @@
 """
-Поддерживающие функции для интерфейса перехвата и логирования исключений.
+Подготовка сообщений для логирования исключений.
 """
-import inspect
-import logging
-from logging import Logger
-from typing import Union, Type, Any
+from typing import Union, Type
 
-
-def get_logger(logger_name: str = 'logger') -> logging.Logger:
-    """
-    Создаёт объект logger, если он не определён в модуле.
-    """
-
-    log_obj: Logger = globals().get(logger_name)
-
-    if log_obj is None:
-        log_obj: Logger = logging.getLogger(__name__)
-
-    return log_obj
+from ehandlers.except_handlers.tools import is_exc_instance
 
 
 def get_simple_or_annotated(err: Union[Exception, Type[Exception], str],
@@ -123,63 +109,3 @@ def custom_msg_err(err: Union[Exception, Type[Exception], str],
     template_context.setdefault('func_name', func_name)
 
     return template_msg_err.format(**template_context)
-
-
-"""
-Записи на полях для себя будущего, который всё это забудет.
-
-Если коротко, на примере KeyError:
->>> isinstance(KeyError, Exception)
-False
->>> str(KeyError)
-<class 'KeyError'>
->>>
->>>
->>> try:
-...     j['boo']
-... except KeyError as e:
-...     type(e)
-...     print(e)
-...     isinstance(e, Exception)
-...
-<class 'KeyError'>
-'boo'
-True
->>>
-"""
-
-
-def is_exception(obj: Any) -> bool:
-    """
-    Проверка, что объект в принципе является любым видом исключения.
-
-    :param obj: Проверяемый тип класса исключений.
-    :return: Логический тип.
-    """
-    return is_exc_instance(obj) or is_pure_exc_class(obj)
-
-
-def is_pure_exc_class(obj: Any) -> bool:
-    """
-    Инспектируем объект на принадлежность к классу Exception, но при этом,
-    что уже не является экземпляром Exception.
-
-    :param obj: Проверяемый тип класса исключений.
-    :return: Логический тип.
-    """
-
-    is_instance = is_exc_instance(obj)
-    is_exc_class = inspect.isclass(obj) and issubclass(obj, Exception)
-
-    return not is_instance and is_exc_class
-
-
-def is_exc_instance(obj: Any) -> bool:
-    """
-    Проверяем, что это экземпляр Exception.
-
-    :param obj: Проверяемый объект класса исключений.
-    :return: Логический тип.
-    """
-
-    return isinstance(obj, Exception)

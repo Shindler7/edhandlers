@@ -31,11 +31,13 @@ except KeyError as e:
 Затем централизовано обрабатывать подобные исключения и логировать их единым
 образом.
 """
+import inspect
 import logging
 from logging import Logger
 from typing import Callable, Union, Type
 
-from .accessories import is_pure_exc_class, get_simple_or_annotated
+from .messages import get_simple_or_annotated
+from .tools import is_exc_type
 
 
 def intercept_err_and_log(err: Exception,
@@ -73,9 +75,15 @@ def intercept_err_and_log(err: Exception,
     :param log_level: Уровень ошибки, при записи в логи через *logger*.
     :param from_err: Опция, которая позволяет сохранять цепочку исключений,
                      при трансформации.
-    :param source_func: Вызывающая функция (рекомендуется) или её название.
+    :param source_func: Указатель на вызывающую функцию или её название. Если
+                        не установлено, то предпринимается попытка определить
+                        самостоятельно с помощью *inspect* (лучшее поведение).
     :param log_kwargs: Опционально, позиционные аргументы для *Logger*.
     """
+
+    if source_func is None:
+        fn_back = inspect.currentframe().f_back
+        source_func = inspect.getframeinfo(fn_back).function
 
     log_err(err,
             err_annotated=err_annotated,
@@ -110,11 +118,17 @@ def raise_err_and_log(err: Union[Exception, Type[Exception]],
     :param log_obj: Объект Logger, инициализированный в вызывающем модуле.
     :param log_level: Уровень ошибки, при записи в логи через *logger*.
                       Применяются уровни, предустановленные в logging.
-    :param source_func: Вызывающая функция (рекомендуется) или её название.
+    :param source_func: Указатель на вызывающую функцию или её название. Если
+                        не установлено, то предпринимается попытка определить
+                        самостоятельно с помощью *inspect* (лучшее поведение).
     """
 
+    if source_func is None:
+        fn_back = inspect.currentframe().f_back
+        source_func = inspect.getframeinfo(fn_back).function
+
     exc_err = err
-    if is_pure_exc_class(err):
+    if is_exc_type(err):
         if err_message:
             exc_err = err(err_message)
 
@@ -152,28 +166,40 @@ def log_err(err_to_log: Union[Exception, Type[Exception], str],
     :param log_obj: Объект Logger. Если не передан, применяется местный объект.
     :param log_level: Уровень ошибки, при записи в логи через *logger*.
     :param source_func: Указатель на вызывающую функцию (буквально, объект
-                        функции). Через __name__ извлекается название функции,
-                        и учитывается в логировании. Допускается передавать и
-                        строковое название, но это плохая практика и ухудшает
-                        гибкость под развитие (например, при изменении функции
-                        можно пропустить, что в логи отдаётся строковое старое
+                        функции). Если не установлено, будет предпринята
+                        попытка определить функцию с помощью *inspect*
+                        (возможно, лучшее поведение). При предоставлении
+                        значения, лучше в виде указателя на функцию. Через
+                        __name__ извлекается её название и учитывается в
+                        логировании. Допускается передавать и строковое
+                        название, но это плохая практика и ухудшает гибкость
+                        под развитие (например, при изменении функции можно
+                        пропустить, что в логи отдаётся строковое старое
                         название).
     :param log_kwargs: Опционально, позиционные аргументы для *Logger*.
     """
 
     def get_log_obj(log):
         if log is None:
-            raise_type(AttributeError, msg='Отсутствует объект логирования')
+            raise_type(AttributeError, msg='отсутствует объект логирования')
         return log
 
     def get_func_name(fn):
-        if fn is None or not isinstance(fn, (str, Callable)):
+        if not isinstance(fn, (str, Callable)):
             fn = log_err
         if isinstance(fn, Callable):
             return fn.__name__
         return fn
 
-    log_obj, func_name = get_log_obj(log_obj), get_func_name(source_func)
+    # Определение имени вызывающей функции
+    if source_func is None:
+        fn_back = inspect.currentframe().f_back
+        func_name = inspect.getframeinfo(fn_back).function
+    else:
+        func_name = get_func_name(source_func)
+
+    # Объект логирования.
+    log_obj = get_log_obj(log_obj)
 
     err_msg: str = get_simple_or_annotated(err_to_log,
                                            func_name,
@@ -186,7 +212,7 @@ def raise_except(err: Union[Exception, Type[Exception]],
                  err_raise: Union[Exception, Type[Exception]] = None,
                  from_err: bool = True):
     """
-    Функция вызывает переданное исключение.
+    Вызвать переданное исключение.
 
     :param err: Экземпляр исключения или тип классов исключений. Рекомендуется
                 всегда передавать экземпляр, для информативности.
@@ -196,6 +222,11 @@ def raise_except(err: Union[Exception, Type[Exception]],
                      при трансформации (*raise err_raise from err*).
     """
 
+    if is_exc_type(err):
+        err = err()
+    if is_exc_type(err_raise):
+        err_raise = err_raise()
+
     if err_raise:
         raise err_raise from err if from_err else err_raise
 
@@ -204,26 +235,20 @@ def raise_except(err: Union[Exception, Type[Exception]],
 
 def raise_type(err: Type[Exception], *, msg: str = None):
     """
-    Функция создаёт исключение и вызывает его, добавляя текст сообщения.
+    Создаёт экземпляр исключения и вызывает его.
 
-    Красивая обёртка, внедрение которой мотивировано желанием сделать более
-    элегантную выдачу исключений. Если погружать текст ошибки сразу в raise,
-    то при трассировке стека текст повторяется дважды: при демонстрации части
-    кода, где вызвано исключение и собственно само исключение.
-
-    Если оборачивать это через переменную, то текст дважды не демонстрируется,
-    однако такая конструкция в коде увеличивает и загромождает код, поэтому
-    сделана такая вот обёртка для элегантности.
+    Обёртка для ценителей сокращённой трассировки. Стандартный метод
+    возбуждения исключения приводит к дублированию отображения: при
+    демонстрации части кода, где вызвано исключение, и само исключение.
 
     :param err: Тип класса исключений.
     :param msg: Текст сообщения об ошибке.
     """
 
-    if not is_pure_exc_class(err):
+    if not is_exc_type(err):
         # Здесь трассировка сохранена, чтобы упростить поиск ошибки, если
         # функция будет неправильно использована.
-        raise TypeError(f'Аргумент {err} должен быть типом исключения, '
-                        f'а не экземпляром исключения')
+        raise TypeError(f'{err} должен быть типом класса исключений')
 
     err_instance: Exception = err(msg) if msg else err()
 
