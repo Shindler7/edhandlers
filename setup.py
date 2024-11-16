@@ -8,7 +8,7 @@ def load_requirements(file_name) -> list[str]:
 
 setup(
     name='ehandlers',
-    version='0.3.2b',
+    version='0.3.3',
     packages=find_packages(),
     install_requires=load_requirements('requirements.txt'),
     author='Vlad Barmichev',
