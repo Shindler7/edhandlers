@@ -2,7 +2,7 @@
 
 
 def load_requirements(file_name) -> list[str]:
-    with open(file_name, 'r') as file:
+    with open(file_name, 'r', encoding='utf-8') as file:
         return file.read().splitlines()
 
 
@@ -14,7 +14,7 @@ setup(
     author='Vlad Barmichev',
     author_email='barmichev@gmail.com',
     description='Collection of exception handlers',
-    long_description=open('README.md').read(),
+    long_description=open('README.md', encoding='utf-8').read(),
     long_description_content_type='text/markdown',
     url='https://github.com/Shindler7/ehandler',
     classifiers=[
