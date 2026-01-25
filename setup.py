@@ -1,16 +1,21 @@
-﻿from setuptools import setup, find_packages
+﻿from pathlib import Path
+
+from setuptools import setup, find_packages
 
 
-def load_requirements(file_name) -> list[str]:
-    with open(file_name, 'r', encoding='utf-8') as file:
+def load_requirements(file_name: Path) -> list[str]:
+    if not file_name.is_file():
+        return []
+
+    with file_name.open('r', encoding='utf-8') as file:
         return file.read().splitlines()
 
 
 setup(
     name='ehandlers',
-    version='0.3.3',
+    version='0.4.0',
     packages=find_packages(),
-    install_requires=load_requirements('requirements.txt'),
+    install_requires=load_requirements(Path('requirements.txt')),
     author='Vlad Barmichev',
     author_email='barmichev@gmail.com',
     description='Collection of exception handlers',
@@ -24,4 +29,3 @@ setup(
     ],
     python_requires='>=3.10',
 )
-

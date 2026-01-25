@@ -6,5 +6,19 @@ __pycache__/
 # PyCharm
 .idea/
 
+# environment
+.venv/
+venv/
+req_development.txt
+
+# Git
+.gitignore
+
+# Build PYPI
+ehandlers.egg-info/
+
 # Sphinx documentation
 docs/_build/
+
+# Test env
+test/

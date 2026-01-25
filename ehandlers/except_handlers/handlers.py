@@ -34,7 +34,7 @@ except KeyError as e:
 import inspect
 import logging
 from logging import Logger
-from typing import Callable, Union, Type
+from typing import Callable, NoReturn
 
 from .messages import get_simple_or_annotated
 from .tools import is_exc_type
@@ -42,43 +42,32 @@ from .tools import is_exc_type
 
 def intercept_err_and_log(err: Exception,
                           *,
-                          err_annotated: str = None,
-                          err_raise: Exception = None,
+                          err_annotated: str | None = None,
+                          err_raise: Exception | None = None,
                           log_obj: Logger,
                           log_level: int = logging.ERROR,
                           from_err: bool = True,
-                          source_func: Union[Callable, str] = None,
-                          **log_kwargs):
-    """
-    Функция-перехватчик исключений.
+                          source_func: Callable | str | None = None,
+                          **log_kwargs) -> NoReturn:
+    """Перехватывает, логирует и повторно возбуждает исключение.
 
-    Основная задача: получить экземпляр класса Exception, сделать запись в
-    логи и вызвать исключение заново.
+    Основное назначение — обработка исключений в блоках `try/except` с
+    добавлением контекста в логи и возможностью трансформации типа исключения.
 
-    Должна использоваться в блоке try/except для обработки возникших
-    исключений. Плохая практика применять перехватчик, как самостоятельный
-    инициатор исключений, хотя формально он эту работу выполнит.
-
-    После обработки переданного экземпляра исключения вызывает исключение
-    заново. Если передано err_raise, то err будет подменён на err_raise.
-
-    :param err: Экземпляр Exception (например, самый подходящий вариант - это
-                перехваченный в *except Exception as err*).
-    :param err_annotated: Иногда мы можем пожелать добавить в log-файл
-                          дополнительную аннотацию к ошибке. Например,
-                          *"Ошибка чтения json: {err}"*.
-    :param err_raise: Целевой экземпляр exception. Если будет передан тип
-                      исключения, он будет обработан, но без инициализации
-                      окажется неинформативным. Сравним: *raise KeyError*
-                      и *raise KeyError('foo')*.
-    :param log_obj: Объект Logger, инициализированный в вызывающем модуле.
-    :param log_level: Уровень ошибки, при записи в логи через *logger*.
-    :param from_err: Опция, которая позволяет сохранять цепочку исключений,
-                     при трансформации.
-    :param source_func: Указатель на вызывающую функцию или её название. Если
-                        не установлено, то предпринимается попытка определить
-                        самостоятельно с помощью *inspect* (лучшее поведение).
-    :param log_kwargs: Опционально, позиционные аргументы для *Logger*.
+    :param err: Перехваченное исключение. Должен быть экземпляром, не классом.
+                Пример: `except ValueError as e:` → `e`.
+    :param err_annotated: Дополнительный текст, уточняющий контекст ошибки.
+                          Может содержать `{err}` для подстановки.
+                          Пример: `"Не удалось десериализовать JSON: {err}"`
+    :param err_raise: Исключение для возбуждения вместо `err`.
+    :param log_obj: Экземпляр логгера для записи исключения (обязательный).
+    :param log_level: Уровень логирования. По умолчанию: `logging.ERROR`.
+    :param from_err: Если `True` и указан `err_raise`, сохраняет цепочку
+                     исключений: `raise new_err from old_err`.
+                     Полезно для отладки, чтобы видеть оригинальную причину.
+    :param source_func: Функция, в которой произошла ошибка. Если не указано,
+                        имя определяется автоматически через `inspect`.
+    :param log_kwargs: Дополнительные аргументы для метода `log()`.
     """
 
     if source_func is None:
@@ -92,45 +81,40 @@ def intercept_err_and_log(err: Exception,
             source_func=source_func,
             **log_kwargs)
 
-    raise_except(err,
-                 err_raise=err_raise,
-                 from_err=from_err)
+    raise_except(err, err_raise=err_raise, from_err=from_err)
 
 
-def raise_err_and_log(err: Union[Exception, Type[Exception]],
+def raise_err_and_log(err: Exception | type[Exception],
                       *,
-                      err_message: str = None,
-                      err_annotated: str = None,
+                      err_message: str | None = None,
+                      err_annotated: str | None = None,
                       log_obj: Logger,
                       log_level: int = logging.ERROR,
-                      source_func: Union[Callable, str] = None):
-    """
-    Инициатор исключения, которое сам и логирует.
+                      source_func: Callable | str | None = None) -> NoReturn:
+    """Создаёт, логирует и возбуждает исключение.
 
-    Отличие от метода *intercept_err_and_log*: последний нацелен на перехват
-    исключений, а этот метод сам порождает его.
+    В отличие от `intercept_err_and_log`, который перехватывает существующие
+    исключения, эта функция сама создаёт и возбуждает их.
 
-    :param err: Экземпляр исключения или тип класса исключений.
-    :param err_message: Если передан тип класса исключений, то он будет
-                        инициализирован в экземпляр с err_message.
-    :param err_annotated: Опционально, аннотация к исключению при записи в
-                          логи.
-    :param log_obj: Объект Logger, инициализированный в вызывающем модуле.
-    :param log_level: Уровень ошибки, при записи в логи через *logger*.
-                      Применяются уровни, предустановленные в logging.
-    :param source_func: Указатель на вызывающую функцию или её название. Если
-                        не установлено, то предпринимается попытка определить
-                        самостоятельно с помощью *inspect* (лучшее поведение).
+    :param err: Исключение для возбуждения.
+    :param err_message: Сообщение для исключения, если передан класс.
+                        Игнорируется, если передан экземпляр.
+    :param err_annotated: Дополнительный контекст для логирования.
+                          Пример: `"Ошибка валидации пользователя"`.
+    :param log_obj: Экземпляр логгера для записи исключения (обязательный).
+    :param log_level: Уровень логирования. По умолчанию: `logging.ERROR`.
+    :param source_func: Функция, в которой произошла ошибка. Если не указано,
+                        имя определяется автоматически через `inspect`.
     """
 
     if source_func is None:
         fn_back = inspect.currentframe().f_back
         source_func = inspect.getframeinfo(fn_back).function
 
-    exc_err = err
     if is_exc_type(err):
-        if err_message:
-            exc_err = err(err_message)
+        exc_err = err(err_message) if err_message else err()
+    else:
+        exc_err = err
 
     log_err(exc_err,
             err_annotated=err_annotated,
@@ -138,50 +122,39 @@ def raise_err_and_log(err: Union[Exception, Type[Exception]],
             log_level=log_level,
             source_func=source_func)
 
-    raise_except(exc_err)
+    raise exc_err
 
 
-def log_err(err_to_log: Union[Exception, Type[Exception], str],
+def log_err(err_to_log: Exception | type[Exception] | str,
             *,
-            err_annotated: str = None,
-            log_obj: Logger = None,
+            err_annotated: str | None = None,
+            log_obj: Logger,
             log_level: int = logging.ERROR,
-            source_func: Union[Callable, str] = None,
-            **log_kwargs):
-    """
-    Функция делает запись в log-файл, с помощью переданного объекта *Logger*.
+            source_func: Callable | str | None = None,
+            **log_kwargs) -> None:
+    """Логирует исключение или сообщение об ошибке с контекстом.
 
-    Если опции log_obj и func_name не переданы, они подменяются на дефолтные,
-    которыми являются, соответственно, logger из модуля расположения log_err,
-    и название функции 'log_err'.
+    Универсальная функция для структурированного логирования ошибок с
+    автоматическим определением контекста и поддержкой различных форматов
+    ошибок.
 
-    :param err_to_log: Данные об исключении, которые должны быть логированы.
-                       Это может быть текстовая строка, экземпляр исключения
-                       (предпочтительно) или чистый класс (тип) исключения
-                       (не рекомендуется, так как может быть неинформативно).
-                       *Заметка*: при обработке исключения через try/except
-                       мы получаем в конструкции *as err* экземпляр исключения.
-    :param err_annotated: Иногда мы желаем логировать дополнительную аннотацию
-                          к ошибке. Например, *"Ошибка чтения json: {err}"*.
-    :param log_obj: Объект Logger. Если не передан, применяется местный объект.
-    :param log_level: Уровень ошибки, при записи в логи через *logger*.
-    :param source_func: Указатель на вызывающую функцию (буквально, объект
-                        функции). Если не установлено, будет предпринята
-                        попытка определить функцию с помощью *inspect*
-                        (возможно, лучшее поведение). При предоставлении
-                        значения, лучше в виде указателя на функцию. Через
-                        __name__ извлекается её название и учитывается в
-                        логировании. Допускается передавать и строковое
-                        название, но это плохая практика и ухудшает гибкость
-                        под развитие (например, при изменении функции можно
-                        пропустить, что в логи отдаётся строковое старое
-                        название).
-    :param log_kwargs: Опционально, позиционные аргументы для *Logger*.
+    :param err_to_log: Информация об ошибке для логирования.
+    :param err_annotated: Дополнительный текст, уточняющий контекст ошибки.
+    :param log_obj: Экземпляр логгера. Если не удаётся определить —
+                    возбуждается `AttributeError`.
+    :param log_level: Уровень логирования из модуля `logging`. По умолчанию:
+                      `logging.ERROR`.
+    :param source_func: Функция, в которой произошла ошибка. Если не указано,
+                        имя определяется автоматически через `inspect`.
+    :param log_kwargs: Дополнительные аргументы для метода `log()` логгера.
     """
 
     def get_log_obj(log):
-        if log is None:
-            raise_type(AttributeError, msg='отсутствует объект логирования')
+        if log is None or not isinstance(log, Logger):
+            raise AttributeError(
+                f'log_err: отсутствует объект логирования. '
+                f'Функция: {func_name}, ошибка: {err_to_log}'
+            )
         return log
 
     def get_func_name(fn):
@@ -193,38 +166,47 @@ def log_err(err_to_log: Union[Exception, Type[Exception], str],
 
     # Определение имени вызывающей функции
     if source_func is None:
-        fn_back = inspect.currentframe().f_back
-        func_name = inspect.getframeinfo(fn_back).function
+        try:
+            current_frame = inspect.currentframe()
+            fn_back = current_frame.f_back
+            func_name = inspect.getframeinfo(fn_back).function
+        finally:
+            del current_frame
     else:
         func_name = get_func_name(source_func)
 
-    # Объект логирования.
+    # Получение объекта логирования.
     log_obj = get_log_obj(log_obj)
 
-    err_msg: str = get_simple_or_annotated(err_to_log,
-                                           func_name,
-                                           err_annotated)
+    err_msg: str = get_simple_or_annotated(
+        err_to_log, func_name, err_annotated)
 
     log_obj.log(log_level, err_msg, **log_kwargs)
 
 
-def raise_except(err: Union[Exception, Type[Exception]],
-                 err_raise: Union[Exception, Type[Exception]] = None,
-                 from_err: bool = True):
-    """
-    Вызвать переданное исключение.
+def raise_except(err: Exception | type[Exception],
+                 err_raise: Exception | type[Exception] | None = None,
+                 from_err: bool = True) -> NoReturn:
+    """Возбуждает исключение, с возможностью замены типа и сохранения
+    контекста.
 
-    :param err: Экземпляр исключения или тип классов исключений. Рекомендуется
-                всегда передавать экземпляр, для информативности.
-    :param err_raise: Опция, если передано, то вызывается вместо err.
-                      Рекомендуется всегда передавать экземпляр.
-    :param from_err: Опция, которая позволяет сохранять цепочку исключений,
-                     при трансформации (*raise err_raise from err*).
+    Универсальная утилита для работы с исключениями, позволяющая:
+    1. Возбудить исключение как есть.
+    2. Заменить одно исключение другим с сохранением исходного как причины.
+    3. Заменить исключение без сохранения контекста.
+
+    :param err: Исходное исключение. Может быть экземпляром или классом
+                Exception.
+    :param err_raise: Исключение для возбуждения вместо `err`. Если не указано,
+                      возбуждается `err`. Формат аналогичен `err`.
+    :param from_err: Если `True` и указан `err_raise`, используется синтаксис
+                     `raise new_exc from old_exc`, сохраняющий цепочку
+                     исключений. Если `False` — контекст теряется.
     """
 
     if is_exc_type(err):
         err = err()
-    if is_exc_type(err_raise):
+    if err_raise and is_exc_type(err_raise):
         err_raise = err_raise()
 
     if err_raise:
@@ -233,21 +215,21 @@ def raise_except(err: Union[Exception, Type[Exception]],
     raise err
 
 
-def raise_type(err: Type[Exception], *, msg: str = None):
-    """
-    Создаёт экземпляр исключения и вызывает его.
+def raise_type(err: type[Exception], *, msg: str = None) -> NoReturn:
+    """Создаёт и возбуждает исключение указанного типа.
 
-    Обёртка для ценителей сокращённой трассировки. Стандартный метод
-    возбуждения исключения приводит к дублированию отображения: при
-    демонстрации части кода, где вызвано исключение, и само исключение.
+    Утилита для чистого возбуждения исключений без лишней трассировки в логах.
+    В отличие от прямого `raise ValueError("message")`, этот метод создаёт
+    более чистый traceback, исключая дублирование информации.
 
-    :param err: Тип класса исключений.
-    :param msg: Текст сообщения об ошибке.
+    :param err: Класс исключения для возбуждения (например, `ValueError`).
+    :param msg: Текст сообщения исключения. Если не указан, используется
+                пустая строка или значение по умолчанию для класса исключения.
+    :raises TypeError: Если переданный `err` не является классом исключения.
     """
 
     if not is_exc_type(err):
-        # Здесь трассировка сохранена, чтобы упростить поиск ошибки, если
-        # функция будет неправильно использована.
+        # Сохраняем трассировку для отладки неправильного использования.
         raise TypeError(f'{err} должен быть типом класса исключений')
 
     err_instance: Exception = err(msg) if msg else err()

@@ -1,28 +1,36 @@
 ![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
+![License](https://img.shields.io/badge/license-MIT-blue.svg?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-0.4.0-green.svg?style=for-the-badge)
 
 # ehandlers
-**Коллекция обработчиков исключений**, позволяющих одновременно логировать 
-события с помощью [logging](https://docs.python.org/3/library/logging.html).
 
-Собственной механики логирования не имеет.
+Библиотека обработки исключений для Python-проектов, расширяющая стандартный
+модуль `logging`. Предоставляет декораторы и утилиты для структурированного
+логирования ошибок с полным контекстом.
 
-> **Важно:** Создано и обкатано в [Django](https://www.djangoproject.com/).
+## Особенности
 
-С версии *0.3.2b* декораторы поддерживают **асинхронные функции**. 
+- **Универсальные декораторы** для синхронного и асинхронного кода
+- **Гибкое логирование** с добавлением контекста выполнения
+- **Минимальные зависимости** — только стандартная библиотека Python
+- **Поддержка Django** и других веб-фреймворков
+- **Типизированные аннотации** для улучшенной поддержки IDE
 
 ## Установка
+
+### Github
 
 ```shell
 pip install git+https://github.com/Shindler7/edhandlers.git 
 ```
 
-## Декораторы
+### Для проектов с Poetry
 
-### @err_interceptor
+```shell
+poetry add git+https://github.com/Shindler7/ehandlers.git
+```
 
-**Базовый декоратор-перехватчик**. Обеспечивает исполнение функцией своих 
-задач, а при возбуждении исключения перехватывает его и логирует. Исключение
-возбуждается повторно, при необходимости с сохранением трассировки.
+## Быстрый старт
 
 ```python
 import logging
@@ -31,59 +39,86 @@ from ehandlers.decorators import err_interceptor
 logger = logging.getLogger(__name__)
 
 
-@err_interceptor(log_obj=logger, err_annotated='Функция деления на ноль')
-def boo():
-    return 2/0
+@err_interceptor(log_obj=logger,
+                 err_annotated='Обработка пользовательских данных')
+def process_user_data(user_id: int) -> dict:
+    # Код функции...
+    if user_id < 0:
+        raise ValueError('ID пользователя не может быть отрицательным')
+    return {'id': user_id, 'status': 'active'}
 ```
 
-*Доступные атрибуты*:
-* `err_raise` — позволяет установить исключение, которое будет возбуждено при
-перехвате любых других исключений (необязательно). Можно передать как экземпляр
-исключения (`ValueError('неверное значение')`), так и тип класса исключения
-(`ValueError`), который будет преобразован декоратором в экземпляр;
-* `err_annotated` — добавление любой текстовой информации при логировании 
-исключения (необязательно);
-* `args_to_annotate` — args и kwargs обёрнутой функции будут добавлены в лог 
-(необязательно);
-* `log_obj` — экземпляр `logging`;
-* `log_level` — константа уровня логирования исключения (из стандартного набора
-`logging`: `logging.WARNING`, `logging.ERROR` и др.);
-* `from_err` — если `True` сохраняет трассировку исключения, что наиболее 
-важно, если использован иной экземпляр исключения через атрибут `err_raise` 
-(необязательно).
+## Декораторы
 
-### @err_log_and_return
+# Декораторы обработки ошибок
 
-После перехвата исключения и логирования, обеспечивает **возврат** обёрнутой 
-функцией **предустановленного значения**, а не исключения.
+| Что нужно?                                                             | Какой декоратор?      |
+|------------------------------------------------------------------------|-----------------------|
+| Ошибка должна быть залогирована, но программа должна упасть            | `@err_interceptor`    |
+| Ошибка допустима, нужно вернуть значение по умолчанию и записать в лог | `@err_log_and_return` |
+| Возврат определённого значения должен вызвать исключение (валидаторы)  | `@raise_if_return`    |
+
+### @err_interceptor
+
+Базовый декоратор для перехвата и логирования исключений с возможностью их
+повторного возбуждения.
 
 ```python
 import logging
+
+from ehandlers.decorators import err_interceptor
+
+logger = logging.getLogger(__name__)
+
+
+@err_interceptor(
+    log_obj=logger,
+    err_annotated='Деление чисел',
+    args_to_annotate=True,
+    log_level=logging.ERROR)
+def divide(a: float, b: float) -> float:
+    """Выполняет деление a на b."""
+    return a / b
+```
+
+#### Параметры:
+
+- `log_obj` — экземпляр логгера (обязательный)
+- `err_annotated` — дополнительное описание ошибки
+- `args_to_annotate` — логировать аргументы функции (по умолчанию `False`)
+- `log_level` — уровень логирования (по умолчанию `logging.ERROR`)
+- `err_raise` — исключение для повторного возбуждения (опционально)
+- `from_err` — сохранять оригинальный traceback (по умолчанию `True`)
+
+### @err_log_and_return
+
+Логирует исключение и возвращает заданное значение вместо его возбуждения.
+
+```python
+import logging
+
 from ehandlers.decorators import err_log_and_return
 
 logger = logging.getLogger(__name__)
 
 
-@err_log_and_return(log_obj=logger)
-def foo(key: str):
-    bar: dict[str, str] = {'a': 'A', 'b': 'B', 'c': 'C'}
-    return bar[key]
+@err_log_and_return(
+    log_obj=logger,
+    err_output={'status': 'error', 'message': 'Ошибка обработки'},
+    args_to_annotate=True)
+def get_config_value(key: str) -> Any:
+    """Получает значение из конфигурации."""
+    return CONFIG[key]  # Может вызвать KeyError
 ```
 
-*Доступные атрибуты*:
-* `err_output` — результат, который будет возвращён обёрнутой функцией при
-возбуждении исключения. По-умолчанию None;
-* `err_annotated` — добавление любой текстовой информации при логировании 
-исключения;
-* `args_to_annotate` — args и kwargs обёрнутой функции будут добавлены в лог;
-* `log_obj` — экземпляр `logging`;
-* `log_level` — константа уровня логирования исключения.
+#### Параметры:
+
+- `err_output` — значение, возвращаемое при ошибке (по умолчанию `None`)
+- Другие параметры аналогичны `@err_interceptor`
 
 ### @raise_if_return
 
-**Декоратор-инициатор исключений**, которые он возбуждает при получении 
-возврата от обёрнутой функции. Например, в примере, каждый *return* 
-вызовет `ValueError`. 
+Возбуждает исключение при возврате функцией определённых значений.
 
 ```python
 import logging
@@ -92,86 +127,165 @@ from ehandlers.decorators import raise_if_return
 logger = logging.getLogger(__name__)
 
 
-@raise_if_return(exception=ValueError, log_obj=logger)
-def validate(text: str):
-    if not isinstance(text, str):
-        return f'Текст ожидался str, а получено {type(text)}'
-    
-    if len(text) > 200:
-        return 'Длина текста не должна превышать 200 символов'
+@raise_if_return(
+    exception=ValidationError,
+    log_obj=logger,
+    raise_by_type=(str,),
+    err_msg_annotate='Валидация данных')
+def validate_email(email: str) -> bool:
+    """Валидирует email адрес."""
+    if '@' not in email:
+        return 'Некорректный email адрес'
+    return True
 ```
 
-*Доступные атрибуты*:
-* ``exception`` — экземпляр исключения или тип класса исключения, которое будет
-возбуждаться при перехвате возвратов. В приведённом примере это будет, например,
-`ValueError('Длина текста не должна превышать 200 символов')'`;
-* `err_msg_annotate` — дополнительная информация, которая будет добавлена при
-логировании (необязательно);
-* `log_obj` — экземпляр `logging`;
-* `log_level` — константа уровня логирования исключения;
-* `raise_by_type` — позволяет установить тип данных, перехват которых будет
-возбуждать исключение. По-умолчанию `str`;
-* `raise_by_none` — если `True`, при возврате обёрнутой функцией None будет
-возбуждено исключение. По-умолчанию отключено.
+#### Параметры:
 
-## Функции
+- `exception` — исключение для возбуждения (обязательный)
+- `raise_by_type` — кортеж значений, вызывающих исключение (по умолчанию `str`)
+- raise_by_none — возбуждать исключение при возврате `None` (по умолчанию
+  `False`)
+- `err_msg_annotate` — дополнительное описание в логе
 
-Кроме декораторов доступны отдельные методы, которые могут быть использованы
-внутри дерева `try...except`. Учитывая, что именно на них опираются декораторы,
-во многом дублируют их функционал.
+## Функции-обработчики
 
-* `intercept_err_and_log` — **транзитный перехватчик**: логирует с заданными 
-параметрами переданное исключение и возбуждает его повторно;
+Для использования внутри `try...except` блоков.
 
-```pycon
->>> import logging
->>> from ehandlers.except_handlers.handlers import intercept_err_and_log
->>> logger = logging.getLogger(__name__)
->>> try:
-...     result = 2 / 0
-... except ZeroDivisionError as err:
-...     intercept_err_and_log(err, log_obj=logger)
-...
-<log_err> ZeroDivisionError: division by zero
-Traceback (most recent call last):
-(...)
-ZeroDivisionError: division by zero
-```
- 
-* `raise_err_and_log` — **инициатор исключения**, которое одновременно и 
-логирует;
+### intercept_err_and_log
 
-```pycon
->>> import logging
->>> from ehandlers.except_handlers.handlers import raise_err_and_log
->>> logger = logging.getLogger(__name__)
->>> 
->>> raise_err_and_log(RuntimeError, err_message='перевозбуждение', log_obj=logger)
-<log_err> RuntimeError: перевозбуждение
-Traceback (most recent call last):
-(...)
-RuntimeError: перевозбуждение
+Логирует исключение и возбуждает его повторно.
+
+```python
+import logging
+
+from ehandlers.except_handlers.handlers import intercept_err_and_log
+
+logger = logging.getLogger(__name__)
+
+try:
+    data = json.loads(invalid_json)
+except json.JSONDecodeError as err:
+    intercept_err_and_log(
+        err,
+        log_obj=logger,
+        err_annotated='Парсинг JSON'
+    )
 ```
 
-* `log_err` — **логирует** переданное исключение, **и останавливает** его.
+### raise_err_and_log
 
-```pycon
->>> import logging
->>> from ehandlers.except_handlers.handlers import log_err
->>> logger = logging.getLogger(__name__)
->>>
->>> try:
-...     foo = {'a': 'A'}
-...     foo['b']
-... except KeyError as err:
-...     log_err(err, log_obj=logger, log_level=logging.WARNING)
-...
-<log_err> KeyError: 'b'
+Создаёт и логирует новое исключение.
+
+```python
+import logging
+
+from ehandlers.except_handlers.handlers import raise_err_and_log
+
+logger = logging.getLogger(__name__)
+
+if not user.is_authenticated:
+    raise_err_and_log(
+        PermissionError,
+        err_message='Пользователь не аутентифицирован',
+        log_obj=logger,
+        log_level=logging.WARNING
+    )
 ```
 
-## Версии
+### log_err
 
-- 0.3.3 — добавлена поддержка асинхронных функций, расширена документация.
-- 0.3.2b — обновление названия, структуры пакета, мелкие изменения. 
-- 0.2b — технический коммит (изменение кодировки README.md).
-- 0.1b — первичный пакет (без тестирования).
+Логирует исключение без его повторного возбуждения.
+
+```python
+import logging
+
+from ehandlers.except_handlers.handlers import log_err
+
+logger = logging.getLogger(__name__)
+
+try:
+    db_record.save()
+except DatabaseError as err:
+    log_err(err, log_obj=logger)
+# Продолжаем выполнение...
+```
+
+## Асинхронная поддержка
+
+Все декораторы полностью поддерживают асинхронные функции и методы.
+
+```python
+@err_interceptor(log_obj=logger)
+async def fetch_data(url: str) -> dict:
+    """Асинхронное получение данных."""
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as response:
+            return await response.json()
+```
+
+## 📖 Примеры использования
+
+### Django
+
+```python
+async def news_to_file(news: dict):
+    """Сохранить новости в файл."""
+
+    try:
+        await files.write_json_async(configurate.NEWS_JSON_FULLPATH, news)
+    except OSError as err:
+        intercept_err_and_log(err, log_obj=logger)
+
+```
+
+### FastAPI/Starlette
+
+```python
+from fastapi import FastAPI, HTTPException
+from ehandlers.decorators import err_interceptor
+
+app = FastAPI()
+
+
+@app.get("/items/{item_id}")
+@err_interceptor(
+    log_obj=logger,
+    err_raise=HTTPException(status_code=500, detail="Внутренняя ошибка")
+)
+async def read_item(item_id: int):
+# Логика обработки...
+```
+
+## 🔄 История версий
+
+### [0.4.0] — 25.01.2026
+
+- Исправлены ошибки при обработке асинхронных методов.
+- Улучшена поддержка типизации для IDE.
+- Оптимизирована производительность декораторов.
+
+### [0.3.3]
+
+- Добавлена поддержка асинхронных функций.
+- Расширена документация с примерами использования.
+- Улучшена обработка контекста исключений.
+
+### [0.3.2b]
+
+- Обновлена структура пакета.
+- Добавлены тесты для основных сценариев.
+- Улучшена совместимость с Python 3.11+.
+
+### [0.1b]
+
+- Первый публичный релиз.
+- Базовые декораторы и обработчики.
+- Поддержка синхронного кода.
+
+## 🤝 Вклад в проект
+
+Приветствуется проактивная поддержка и участие в развитии.
+
+## Лицензия
+
+Распространяется под лицензией MIT. См. файл `LICENSE` для подробностей.
