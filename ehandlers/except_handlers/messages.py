@@ -1,6 +1,9 @@
 """
 Подготовка сообщений для логирования исключений.
 """
+from collections.abc import Iterable, Mapping
+from typing import Any
+
 from ehandlers.except_handlers.tools import is_exc_instance, is_exc_type
 
 
@@ -71,7 +74,12 @@ def annotated_msg_err(err: Exception | type[Exception] | str,
     return f'[{func_name}] {err_annotated}: {get_err_str(err)}'
 
 
-def err_annotated_msg(err_a: str, add_args: bool, args, kwargs) -> str:
+def err_annotated_msg(
+        err_a: str | None,
+        add_args: bool,
+        exclude_args: Iterable[str] | None,
+        args: tuple[Any, ...],
+        kwargs: Mapping[str, Any]) -> str | None:
     """Формирует аннотацию с опциональными аргументами функции.
 
     Используется в декораторах для добавления контекста выполнения.
@@ -82,17 +90,29 @@ def err_annotated_msg(err_a: str, add_args: bool, args, kwargs) -> str:
     - ⚠️ Данные не маскируются — учитывайте это при работе с чувствительной
     информацией.
 
-    :param err_a: Базовое сообщение аннотации.
+    :param err_a: Базовое сообщение аннотации. Может быть None.
     :param add_args: Флаг добавления аргументов функции к аннотации.
+    :param exclude_args: Перечисленные именованные аргументы будут исключены
+                         из выдачи, если используется `add_args`.
     :param args: Позиционные аргументы вызванной функции.
     :param kwargs: Именованные аргументы вызванной функции.
+    :returns: None, если нет `err_a` и `add_args=False`, в ином случае
+              оформленная строка.
     """
 
     if not add_args:
         return err_a
 
-    args_repr = repr(args) if args else '()'
-    kwargs_repr = repr(kwargs) if kwargs else '{}'
+    args_repr: str = repr(args) if args else '()'
+
+    # Kwargs требует более детальной обработки.
+    if kwargs:
+        excluded: set[str] = set(exclude_args or ())
+        valid_kwargs = {k: v for k, v in kwargs.items() if k not in excluded}
+        kwargs_repr: str = repr(valid_kwargs)
+    else:
+        kwargs_repr: str = '{}'
+
     args_info = f'args={args_repr}, kwargs={kwargs_repr}'
 
     if err_a:

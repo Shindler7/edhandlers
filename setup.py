@@ -13,7 +13,7 @@ def load_requirements(file_name: Path) -> list[str]:
 
 setup(
     name='ehandlers',
-    version='0.4.0',
+    version='0.4.1',
     packages=find_packages(),
     install_requires=load_requirements(Path('requirements.txt')),
     author='Vlad Barmichev',

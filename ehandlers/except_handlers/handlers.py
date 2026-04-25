@@ -43,7 +43,7 @@ from .tools import is_exc_type
 def intercept_err_and_log(err: Exception,
                           *,
                           err_annotated: str | None = None,
-                          err_raise: Exception | None = None,
+                          err_raise: Exception | type[Exception] | None = None,
                           log_obj: Logger,
                           log_level: int = logging.ERROR,
                           from_err: bool = True,
@@ -182,6 +182,11 @@ def log_err(err_to_log: Exception | type[Exception] | str,
         err_to_log, func_name, err_annotated)
 
     log_obj.log(log_level, err_msg, **log_kwargs)
+
+
+"""
+Возбудители исключений.
+"""
 
 
 def raise_except(err: Exception | type[Exception],

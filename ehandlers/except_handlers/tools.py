@@ -1,24 +1,23 @@
 """
 Поддерживающие функции для интерфейса перехвата и логирования исключений.
 """
-import inspect
-from typing import Any
+from typing import TypeAlias, TypeGuard
+
+ExcInst: TypeAlias = Exception
+ExcType: TypeAlias = type[Exception]
+ExcLike: TypeAlias = ExcInst | ExcType
 
 
-def is_exception(obj: Any) -> bool:
-    """Объект является любым видом исключения?"""
-    return is_exc_instance(obj) or is_exc_type(obj)
-
-
-def is_exc_type(obj: Any) -> bool:
-    """Это объект типа класса исключений? Пример: TypeError."""
-
-    is_instance = is_exc_instance(obj)
-    is_exc_class = inspect.isclass(obj) and issubclass(obj, Exception)
-
-    return not is_instance and is_exc_class
-
-
-def is_exc_instance(obj: Any) -> bool:
+def is_exc_instance(obj: object) -> TypeGuard[ExcInst]:
     """Это экземпляр исключения? Пример: ValueError("message")"""
     return isinstance(obj, Exception)
+
+
+def is_exc_type(obj: object) -> TypeGuard[ExcType]:
+    """Это класс исключений? Пример: TypeError."""
+    return isinstance(obj, type) and issubclass(obj, Exception)
+
+
+def is_exception(obj: object) -> TypeGuard[ExcLike]:
+    """Объект является любым видом исключения?"""
+    return is_exc_instance(obj) or is_exc_type(obj)

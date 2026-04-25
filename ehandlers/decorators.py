@@ -4,18 +4,20 @@
 import functools
 import inspect
 import logging
+from collections.abc import Iterable
 from logging import Logger
 from typing import Callable, Any, NoReturn
 
 from .except_handlers.handlers import intercept_err_and_log, log_err
 from .except_handlers.messages import err_annotated_msg
-from .except_handlers.tools import is_exc_type
+from .except_handlers.tools import is_exc_type, is_exc_instance
 
 
 def err_interceptor(err_raise: Exception | type[Exception] | None = None,
                     *,
-                    err_annotated: str = None,
+                    err_annotated: str | None = None,
                     args_to_annotate: bool = False,
+                    exclude_args: Iterable[str] | None = None,
                     log_obj: Logger,
                     from_err: bool = True,
                     log_level: int = logging.ERROR):
@@ -46,8 +48,10 @@ def err_interceptor(err_raise: Exception | type[Exception] | None = None,
                              добавлены в лог (полезно для отладки). ⚠️ Данные
                              не маскируются — учитывайте это при работе с
                              чувствительной информацией.
-    :param log_obj: Экземпляр логгера (`logging.Logger`). Исключение будет
-                    записано с указанным уровнем логирования.
+    :param exclude_args: Перечисленные аргументы будут исключены из выдачи,
+                         если используется `args_to_annotate=True`.
+    :param log_obj: Экземпляр логгера (`Logger`). Исключение будет записано
+                    с указанным уровнем логирования.
     :param from_err: Сохраняет цепочку исключений при использовании
                      `err_raise`. При `True` используется синтаксис
                      `raise new_err from err`, что сохраняет оригинальный
@@ -63,9 +67,10 @@ def err_interceptor(err_raise: Exception | type[Exception] | None = None,
                 try:
                     return await func(*args, **kwargs)
                 except Exception as err:
-                    err_a: str = err_annotated_msg(err_annotated,
-                                                   args_to_annotate,
-                                                   args, kwargs)
+                    err_a: str | None = err_annotated_msg(err_annotated,
+                                                          args_to_annotate,
+                                                          exclude_args,
+                                                          args, kwargs)
                     intercept_err_and_log(err,
                                           err_raise=err_raise,
                                           err_annotated=err_a,
@@ -83,9 +88,10 @@ def err_interceptor(err_raise: Exception | type[Exception] | None = None,
                 try:
                     return func(*args, **kwargs)
                 except Exception as err:
-                    err_a: str = err_annotated_msg(err_annotated,
-                                                   args_to_annotate,
-                                                   args, kwargs)
+                    err_a: str | None = err_annotated_msg(err_annotated,
+                                                          args_to_annotate,
+                                                          exclude_args,
+                                                          args, kwargs)
                     intercept_err_and_log(err,
                                           err_raise=err_raise,
                                           err_annotated=err_a,
@@ -124,9 +130,8 @@ def raise_if_return(*,
     :param log_obj: Экземпляр логгера для записи возбуждаемых исключений.
     :param log_level: Уровень логирования исключения.
     :param raise_by_type: Кортеж типов, при возврате которых возбуждается
-                          исключение. По умолчанию `(str,)` — только строки
-                          считаются ошибками. Пример: `(str, dict)` — строки
-                          и словари.
+                          исключение. По умолчанию только строки считаются
+                          ошибками. Пример: `(str, dict)` — строки и словари.
     :param raise_by_none: Если `True`, возврат `None` также вызывает
                           исключение. По умолчанию `False` — `None`
                           возвращается без ошибки.
@@ -146,10 +151,13 @@ def raise_if_return(*,
 
         def raise_error(result_func: Any) -> NoReturn:
             """Выбросить исключение."""
-            err = exception
             if is_exc_type(exception):
                 err_msg = get_err_msg(result_func, err_msg_annotate)
-                err = err(err_msg)
+                err: Exception = exception(err_msg)
+            elif is_exc_instance(exception):
+                err: Exception = exception  # noqa: заглушка для PyCharm.
+            else:
+                raise TypeError('exception должен быть в классе исключений')
 
             intercept_err_and_log(err,
                                   log_obj=log_obj,
@@ -186,6 +194,7 @@ def err_log_and_return(*,
                        err_output: Any | None = None,
                        err_annotated: str | None = None,
                        args_to_annotate: bool = False,
+                       exclude_args: Iterable[str] | None = None,
                        log_obj: Logger,
                        log_level: int = logging.ERROR,
                        ):
@@ -206,6 +215,8 @@ def err_log_and_return(*,
     :param args_to_annotate: Если `True`, имена аргументов функции добавляются
                              в лог. ⚠️ Данные не маскируются — учитывайте это
                              при работе с чувствительной информацией.
+    :param exclude_args: Перечисленные аргументы будут исключены из выдачи,
+                         если используется `args_to_annotate=True`.
     :param log_obj: Экземпляр логгера для записи исключений.
     :param log_level: Уровень логирования исключения.
     """
@@ -220,8 +231,10 @@ def err_log_and_return(*,
 
                 except Exception as err:
                     log_err(err,
-                            err_annotated=err_annotated_msg(
-                                err_annotated, args_to_annotate, args, kwargs),
+                            err_annotated=err_annotated_msg(err_annotated,
+                                                            args_to_annotate,
+                                                            exclude_args,
+                                                            args, kwargs),
                             log_obj=log_obj,
                             log_level=log_level,
                             source_func=func)
@@ -239,8 +252,10 @@ def err_log_and_return(*,
 
                 except Exception as err:
                     log_err(err,
-                            err_annotated=err_annotated_msg(
-                                err_annotated, args_to_annotate, args, kwargs),
+                            err_annotated=err_annotated_msg(err_annotated,
+                                                            args_to_annotate,
+                                                            exclude_args,
+                                                            args, kwargs),
                             log_obj=log_obj,
                             log_level=log_level,
                             source_func=func)
