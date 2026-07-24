@@ -102,6 +102,7 @@ from ehandlers.decorators import err_log_and_return
 logger = logging.getLogger(__name__)
 
 
+# noinspection PyUnresolvedReferences
 @err_log_and_return(
     log_obj=logger,
     err_output={'status': 'error', 'message': 'Ошибка обработки'},
@@ -122,17 +123,19 @@ def get_config_value(key: str) -> Any:
 
 ```python
 import logging
+
 from ehandlers.decorators import raise_if_return
 
 logger = logging.getLogger(__name__)
 
 
+# noinspection PyUnresolvedReferences
 @raise_if_return(
     exception=ValidationError,
     log_obj=logger,
     raise_by_type=(str,),
     err_msg_annotate='Валидация данных')
-def validate_email(email: str) -> bool:
+def validate_email(email: str) -> bool | str:
     """Валидирует email адрес."""
     if '@' not in email:
         return 'Некорректный email адрес'
@@ -163,8 +166,8 @@ from ehandlers.except_handlers.handlers import intercept_err_and_log
 logger = logging.getLogger(__name__)
 
 try:
-    data = json.loads(invalid_json)
-except json.JSONDecodeError as err:
+    data = json.loads(invalid_json)  # noqa
+except json.JSONDecodeError as err:  # noqa
     intercept_err_and_log(
         err,
         log_obj=logger,
@@ -183,7 +186,7 @@ from ehandlers.except_handlers.handlers import raise_err_and_log
 
 logger = logging.getLogger(__name__)
 
-if not user.is_authenticated:
+if not user.is_authenticated:  # noqa
     raise_err_and_log(
         PermissionError,
         err_message='Пользователь не аутентифицирован',
@@ -204,8 +207,8 @@ from ehandlers.except_handlers.handlers import log_err
 logger = logging.getLogger(__name__)
 
 try:
-    db_record.save()
-except DatabaseError as err:
+    db_record.save()  # noqa
+except DatabaseError as err:  # noqa
     log_err(err, log_obj=logger)
 # Продолжаем выполнение...
 ```
@@ -215,6 +218,7 @@ except DatabaseError as err:
 Все декораторы полностью поддерживают асинхронные функции и методы.
 
 ```python
+# noinspection PyUnresolvedReferences
 @err_interceptor(log_obj=logger)
 async def fetch_data(url: str) -> dict:
     """Асинхронное получение данных."""
@@ -228,20 +232,22 @@ async def fetch_data(url: str) -> dict:
 ### Django
 
 ```python
+# noinspection PyUnresolvedReferences
 async def news_to_file(news: dict):
     """Сохранить новости в файл."""
 
     try:
         await files.write_json_async(configurate.NEWS_JSON_FULLPATH, news)
     except OSError as err:
-        intercept_err_and_log(err, log_obj=logger)
+        intercept_err_and_log(err, log_obj=logger)  # noqa
 
 ```
 
 ### FastAPI/Starlette
 
 ```python
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException  # noqa
+
 from ehandlers.decorators import err_interceptor
 
 app = FastAPI()
@@ -249,11 +255,11 @@ app = FastAPI()
 
 @app.get("/items/{item_id}")
 @err_interceptor(
-    log_obj=logger,
+    log_obj=logger,  # noqa
     err_raise=HTTPException(status_code=500, detail="Внутренняя ошибка")
 )
-async def read_item(item_id: int):
-# Логика обработки...
+async def read_item(_item_id: int):
+    print('Логика обработки...')
 ```
 
 ## Тесты
@@ -265,6 +271,11 @@ python -m pytest
 ```
 
 ## 🔄 История версий
+
+### [0.4.2] — 24.07.2026
+
+- Исправлена опечатка в `setup.py` в ссылке на репозиторий проекта, из-за чего
+  могли возникать ложные предупреждения в некоторых IDE.
 
 ### [0.4.1] — 25.04.2026
 

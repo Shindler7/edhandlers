@@ -13,7 +13,7 @@ def load_requirements(file_name: Path) -> list[str]:
 
 setup(
     name='ehandlers',
-    version='0.4.1',
+    version='0.4.2',
     packages=find_packages(),
     install_requires=load_requirements(Path('requirements.txt')),
     author='Vlad Barmichev',
@@ -21,7 +21,7 @@ setup(
     description='Collection of exception handlers',
     long_description=open('README.md', encoding='utf-8').read(),
     long_description_content_type='text/markdown',
-    url='https://github.com/Shindler7/ehandler',
+    url='https://github.com/Shindler7/edhandlers',
     classifiers=[
         'Programming Language :: Python :: 3',
         'License :: OSI Approved :: MIT License',
