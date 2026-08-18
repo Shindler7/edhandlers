@@ -37,7 +37,7 @@ __all__ = (
     'tools',
 )
 
-__version__ = '0.4.3'
+__version__ = '0.5.0'
 __author__ = 'Vlad Barmichev'
 __email__ = 'barmichev@gmail.com'
 __status__ = 'Production'
