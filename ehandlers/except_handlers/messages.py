@@ -1,21 +1,28 @@
 """
 Подготовка сообщений для логирования исключений.
 """
+
 from collections.abc import Iterable, Mapping
 from typing import Any
 
 from ehandlers.except_handlers.tools import is_exc_instance, is_exc_type
 
 
-def get_simple_or_annotated(err: Exception | type[Exception] | str,
-                            func_name: str,
-                            err_annotated: str | None = None) -> str:
+def get_simple_or_annotated(
+    err: Exception | type[Exception] | str,
+    func_name: str,
+    err_annotated: str | None = None,
+) -> str:
     """Выбирает формат сообщения об ошибке: простой или аннотированный.
 
-    :param err: Объект ошибки.
-    :param func_name: Имя функции, в которой произошла ошибка.
-    :param err_annotated: Опциональная аннотация ошибки.
-    :return: Отформатированное сообщение об ошибке.
+    Args:
+        err: Объект исключения (ошибки).
+        func_name: Имя функции, в которой произошло исключение.
+        err_annotated: Опциональная текстовая аннотация для подстановки.
+            Если передана, формирует расширенный контекст лога.
+
+    Returns:
+        Отформатированное сообщение об ошибке, готовое для записи в лог.
     """
 
     if err_annotated is None:
@@ -26,9 +33,12 @@ def get_simple_or_annotated(err: Exception | type[Exception] | str,
 def get_err_str(err: Exception | type[Exception] | str) -> str:
     """Преобразует объект ошибки в строковое представление.
 
-    :param err: Объект ошибки.
-    :return: Строка распаковки Exception или содержимое атрибута `err`, если
-             это не объект `Exception`.
+    Args:
+        err: Объект ошибки или любое другое значение, вызвавшее сбой.
+
+    Returns:
+        Строка распаковки Exception или содержимое атрибута `err`,
+        если переданный объект не является наследником Exception.
     """
 
     if isinstance(err, str):
@@ -44,60 +54,65 @@ def get_err_str(err: Exception | type[Exception] | str) -> str:
             message = f'{message}: {err_text}'
         return message
 
-    raise TypeError(f'Неподдерживаемый тип ошибки: {err!r}')
+    raise TypeError(f'Неподдерживаемый тип ошибки: {err.__class__.__name__}')
 
 
-def simple_msg_err(err: Exception | type[Exception] | str,
-                   func_name: str) -> str:
+def simple_msg_err(err: Exception | type[Exception] | str, func_name: str) -> str:
     """Формирует базовое сообщение об ошибке для логирования.
 
-    :param err: Источник информации об ошибке.
-    :param func_name: Имя функции, в которой произошла ошибка.
-    :return: Отформатированная строка для лога.
+    Args:
+        err: Источник информации об ошибке.
+        func_name: Имя функции, в которой произошла ошибка.
+
+    Returns:
+        Отформатированная строка для лога.
     """
 
     return f'[{func_name}] {get_err_str(err)}'
 
 
-def annotated_msg_err(err: Exception | type[Exception] | str,
-                      func_name: str,
-                      err_annotated: str
-                      ) -> str:
+def annotated_msg_err(
+    err: Exception | type[Exception] | str, func_name: str, err_annotated: str
+) -> str:
     """Формирует аннотированное сообщение об ошибке.
 
-    :param err: Объект ошибки.
-    :param func_name: Имя функции, в которой произошла ошибка.
-    :param err_annotated: Контекст или описание ошибки.
-    :return: Отформатированная строка с аннотацией.
+    Args:
+        err: Объект ошибки.
+        func_name: Имя функции, в которой произошла ошибка.
+        err_annotated: Контекст или описание ошибки.
+
+    Returns:
+        Отформатированная строка с аннотацией.
     """
 
     return f'[{func_name}] {err_annotated}: {get_err_str(err)}'
 
 
 def err_annotated_msg(
-        err_a: str | None,
-        add_args: bool,
-        exclude_args: Iterable[str] | None,
-        args: tuple[Any, ...],
-        kwargs: Mapping[str, Any]) -> str | None:
+    err_a: str | None,
+    add_args: bool,
+    exclude_args: Iterable[str] | None,
+    args: tuple[Any, ...],
+    kwargs: Mapping[str, Any],
+) -> str | None:
     """Формирует аннотацию с опциональными аргументами функции.
 
     Используется в декораторах для добавления контекста выполнения.
 
-    Примечания:
+    Warnings:
+        Данные не маскируются — учитывайте это при работе с чувствительной информацией.
+        Аргументы вносятся в логи "как есть".
 
-    - Аргументы логируются как есть, включая их представление через `repr()`.
-    - ⚠️ Данные не маскируются — учитывайте это при работе с чувствительной
-    информацией.
+    Args:
+        err_a: Базовое сообщение аннотации.
+        add_args: Флаг добавления аргументов функции к аннотации.
+        exclude_args: Перечисленные именованные аргументы, которые будут
+            исключены из выдачи, если используется `add_args`.
+        *args: Позиционные аргументы вызванной функции.
+        **kwargs: Именованные аргументы вызванной функции.
 
-    :param err_a: Базовое сообщение аннотации. Может быть None.
-    :param add_args: Флаг добавления аргументов функции к аннотации.
-    :param exclude_args: Перечисленные именованные аргументы будут исключены
-                         из выдачи, если используется `add_args`.
-    :param args: Позиционные аргументы вызванной функции.
-    :param kwargs: Именованные аргументы вызванной функции.
-    :returns: None, если нет `err_a` и `add_args=False`, в ином случае
-              оформленная строка.
+    Returns:
+        None, если нет `err_a` и `add_args=False`, в ином случае оформленная строка.
     """
 
     if not add_args:

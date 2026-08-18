@@ -1,25 +1,27 @@
-﻿from pathlib import Path
+from pathlib import Path
 
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
+
+import ehandlers
+
+REQUIREMENTS: Path = Path('requirements.txt')
+README: Path = Path('README.md')
 
 
-def load_requirements(file_name: Path) -> list[str]:
-    if not file_name.is_file():
-        return []
-
-    with file_name.open('r', encoding='utf-8') as file:
-        return file.read().splitlines()
+def read_file(file: Path) -> str:
+    """Загрузка данных из переданного файла."""
+    return file.read_text(encoding='utf-8')
 
 
 setup(
     name='ehandlers',
-    version='0.4.2',
+    version=ehandlers.__version__,
+    author=ehandlers.__author__,
+    author_email=ehandlers.__email__,
     packages=find_packages(),
-    install_requires=load_requirements(Path('requirements.txt')),
-    author='Vlad Barmichev',
-    author_email='barmichev@gmail.com',
-    description='Collection of exception handlers',
-    long_description=open('README.md', encoding='utf-8').read(),
+    install_requires=read_file(REQUIREMENTS).splitlines(),
+    description='Структурированная обработка исключений с логированием',
+    long_description=read_file(README),
     long_description_content_type='text/markdown',
     url='https://github.com/Shindler7/edhandlers',
     classifiers=[
@@ -27,5 +29,5 @@ setup(
         'License :: OSI Approved :: MIT License',
         'Operating System :: OS Independent',
     ],
-    python_requires='>=3.10',
+    python_requires='>=3.12',
 )

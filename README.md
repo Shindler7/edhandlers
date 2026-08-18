@@ -4,9 +4,8 @@
 
 # ehandlers
 
-Библиотека обработки исключений для Python-проектов, расширяющая стандартный
-модуль `logging`. Предоставляет декораторы и утилиты для структурированного
-логирования ошибок с полным контекстом.
+Библиотека обработки исключений для Python-проектов, расширяющая стандартный модуль `logging`. Предоставляет декораторы
+и утилиты для структурированного логирования ошибок с полным контекстом.
 
 ## Особенности
 
@@ -34,13 +33,12 @@ poetry add git+https://github.com/Shindler7/ehandlers.git
 
 ```python
 import logging
-from ehandlers.decorators import err_interceptor
+from ehandlers import err_interceptor
 
 logger = logging.getLogger(__name__)
 
 
-@err_interceptor(log_obj=logger,
-                 err_annotated='Обработка пользовательских данных')
+@err_interceptor(log=logger, err_annotated='Обработка пользовательских данных')
 def process_user_data(user_id: int) -> dict:
     # Код функции...
     if user_id < 0:
@@ -60,8 +58,7 @@ def process_user_data(user_id: int) -> dict:
 
 ### @err_interceptor
 
-Базовый декоратор для перехвата и логирования исключений с возможностью их
-повторного возбуждения.
+Базовый декоратор для перехвата и логирования исключений с возможностью их повторного возбуждения.
 
 ```python
 import logging
@@ -72,10 +69,11 @@ logger = logging.getLogger(__name__)
 
 
 @err_interceptor(
-    log_obj=logger,
+    log=logger,
     err_annotated='Деление чисел',
     args_to_annotate=True,
-    log_level=logging.ERROR)
+    log_level=logging.ERROR,
+)
 def divide(a: float, b: float) -> float:
     """Выполняет деление a на b."""
     return a / b
@@ -83,12 +81,15 @@ def divide(a: float, b: float) -> float:
 
 #### Параметры:
 
-- `log_obj` — экземпляр логгера (обязательный)
+- `log` — экземпляр логгера (обязательный)
 - `err_annotated` — дополнительное описание ошибки
 - `args_to_annotate` — логировать аргументы функции (по умолчанию `False`)
 - `log_level` — уровень логирования (по умолчанию `logging.ERROR`)
 - `err_raise` — исключение для повторного возбуждения (опционально)
 - `from_err` — сохранять оригинальный traceback (по умолчанию `True`)
+
+> _Изменено в версии 0.5.0_: на замену атрибута `log_obj` введён атрибут `log`. Будет
+> полностью исключён с версии `0.6.0`.
 
 ### @err_log_and_return
 
@@ -104,9 +105,10 @@ logger = logging.getLogger(__name__)
 
 # noinspection PyUnresolvedReferences
 @err_log_and_return(
-    log_obj=logger,
+    log=logger,
     err_output={'status': 'error', 'message': 'Ошибка обработки'},
-    args_to_annotate=True)
+    args_to_annotate=True,
+)
 def get_config_value(key: str) -> Any:
     """Получает значение из конфигурации."""
     return CONFIG[key]  # Может вызвать KeyError
@@ -132,9 +134,10 @@ logger = logging.getLogger(__name__)
 # noinspection PyUnresolvedReferences
 @raise_if_return(
     exception=ValidationError,
-    log_obj=logger,
+    log=logger,
     raise_by_type=(str,),
-    err_msg_annotate='Валидация данных')
+    err_msg_annotate='Валидация данных',
+)
 def validate_email(email: str) -> bool | str:
     """Валидирует email адрес."""
     if '@' not in email:
@@ -168,11 +171,7 @@ logger = logging.getLogger(__name__)
 try:
     data = json.loads(invalid_json)  # noqa
 except json.JSONDecodeError as err:  # noqa
-    intercept_err_and_log(
-        err,
-        log_obj=logger,
-        err_annotated='Парсинг JSON'
-    )
+    intercept_err_and_log(err, log=logger, err_annotated='Парсинг JSON')
 ```
 
 ### raise_err_and_log
@@ -190,8 +189,8 @@ if not user.is_authenticated:  # noqa
     raise_err_and_log(
         PermissionError,
         err_message='Пользователь не аутентифицирован',
-        log_obj=logger,
-        log_level=logging.WARNING
+        log=logger,
+        log_level=logging.WARNING,
     )
 ```
 
@@ -209,7 +208,7 @@ logger = logging.getLogger(__name__)
 try:
     db_record.save()  # noqa
 except DatabaseError as err:  # noqa
-    log_err(err, log_obj=logger)
+    log_err(err, log=logger)
 # Продолжаем выполнение...
 ```
 
@@ -219,7 +218,7 @@ except DatabaseError as err:  # noqa
 
 ```python
 # noinspection PyUnresolvedReferences
-@err_interceptor(log_obj=logger)
+@err_interceptor(log=logger)
 async def fetch_data(url: str) -> dict:
     """Асинхронное получение данных."""
     async with aiohttp.ClientSession() as session:
@@ -239,8 +238,7 @@ async def news_to_file(news: dict):
     try:
         await files.write_json_async(configurate.NEWS_JSON_FULLPATH, news)
     except OSError as err:
-        intercept_err_and_log(err, log_obj=logger)  # noqa
-
+        intercept_err_and_log(err, log=logger)  # noqa
 ```
 
 ### FastAPI/Starlette
@@ -253,10 +251,10 @@ from ehandlers.decorators import err_interceptor
 app = FastAPI()
 
 
-@app.get("/items/{item_id}")
+@app.get('/items/{item_id}')
 @err_interceptor(
-    log_obj=logger,  # noqa
-    err_raise=HTTPException(status_code=500, detail="Внутренняя ошибка")
+    log=logger,  # noqa
+    err_raise=HTTPException(status_code=500, detail='Внутренняя ошибка'),
 )
 async def read_item(_item_id: int):
     print('Логика обработки...')
@@ -270,17 +268,24 @@ async def read_item(_item_id: int):
 python -m pytest
 ```
 
-## 🔄 История версий
+## История версий
+
+### [0.5.0] — 18.08.2026
+
+- В декораторах и методах добавлен атрибут `log` для будущей замены `log_obj`.
+- Оптимизирован процесс вычисления имени функции, где выбросилось исключение.
+- Удалён метод `raise_type` — плохая практика сложного раскрытия типов исключений.
+- Повышена поддерживаемая версия `Python`: 3.12+.
+- Улучшение кода на основе замечаний `ruff`, без изменения функциональности.
 
 ### [0.4.2] — 24.07.2026
 
-- Исправлена опечатка в `setup.py` в ссылке на репозиторий проекта, из-за чего
-  могли возникать ложные предупреждения в некоторых IDE.
+- Исправлена опечатка в `setup.py` в ссылке на репозиторий проекта.
 
 ### [0.4.1] — 25.04.2026
 
-- Добавлен аргумент `exclude_args` для аргумента `args_to_annotate`, что
-  позволяет исключить отдельные аргументы функций из выдачи в логи.
+- Добавлен аргумент `exclude_args` для аргумента `args_to_annotate`, что позволяет исключить отдельные аргументы функций
+  из выдачи в логи.
 - Улучшена обработка типов данных.
 
 ### [0.4.0] — 25.01.2026
@@ -307,7 +312,7 @@ python -m pytest
 - Базовые декораторы и обработчики.
 - Поддержка синхронного кода.
 
-## 🤝 Вклад в проект
+## Вклад в проект
 
 Приветствуется проактивная поддержка и участие в развитии.
 
