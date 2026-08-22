@@ -9,7 +9,7 @@ from collections.abc import Callable, Iterable
 from logging import Logger
 from typing import Any, NoReturn, TypeVar
 
-from .except_handlers.handlers import MISSING, intercept_err_and_log, log_err
+from .except_handlers.handlers import intercept_err_and_log, log_err
 from .except_handlers.messages import err_annotated_msg
 from .except_handlers.tools import is_exc_type
 
@@ -23,11 +23,12 @@ def err_interceptor(
     *,
     err_annotated: str | None = None,
     args_to_annotate: bool = False,
-    exclude_args: Iterable[str] | None = None,
-    log: Logger = MISSING,
-    log_obj: Logger = MISSING,
+    exclude_self: bool = True,
+    exclude_args: bool = False,
+    exclude_kwargs: Iterable[str] | None = None,
+    log: Logger,
     from_err: bool = True,
-    log_level: int = logging.ERROR,
+    level: int = logging.ERROR,
 ) -> Callable[[F], F]:
     """Декоратор для перехвата, логирования и обработки исключений.
 
@@ -51,13 +52,16 @@ def err_interceptor(
         err_annotated: Дополнительный текст к логу.
         args_to_annotate: Если True, позиционные и именованные аргументы
             декорируемой функции будут добавлены в лог для отладки.
-        exclude_args: Список имён аргументов, которые нужно скрыть из лога,
-            если включен параметр `args_to_annotate`.
+        exclude_self: Если True, атрибуты `self` и `cls` не добавляются в логи.
+            Применяется совместно с `args_to_annotate=True`.
+        exclude_args: Если True, все неименованные аргументы исключаются из логов.
+            Применяется совместно с `args_to_annotate=True`.
+        exclude_kwargs: Список именованных аргументов, которые нужно скрыть из лога.
+            Применяется совместно с `args_to_annotate=True`.
         from_err: Сохраняет цепочку исключений при замене (`raise new_err from err`).
             Если False, оригинальный traceback скрывается. Игнорируется, если
             `err_raise` равен `None`.
-        log_level: Уровень логирования (константы из модуля `logging`).
-        log_obj: Устаревший аргумент. Используйте вместо него `log`.
+        level: Уровень логирования (константы из модуля `logging`).
 
     Returns:
         Декоратор для функции.
@@ -74,15 +78,21 @@ def err_interceptor(
                     return await func(*args, **kwargs)
                 except Exception as err:
                     err_a: str | None = err_annotated_msg(
-                        err_annotated, args_to_annotate, exclude_args, args, kwargs
+                        err_annotated,
+                        add_args=args_to_annotate,
+                        exclude_args=exclude_args,
+                        exclude_self=exclude_self,
+                        exclude_kwargs=exclude_kwargs,
+                        func=func,
+                        args=args,
+                        kwargs=kwargs,
                     )
                     intercept_err_and_log(
                         err,
                         err_raise=err_raise,
                         err_annotated=err_a,
                         log=log,
-                        log_obj=log_obj,
-                        log_level=log_level,
+                        level=level,
                         from_err=from_err,
                         source_func=func,
                     )
@@ -97,15 +107,21 @@ def err_interceptor(
                     return func(*args, **kwargs)
                 except Exception as err:
                     err_a: str | None = err_annotated_msg(
-                        err_annotated, args_to_annotate, exclude_args, args, kwargs
+                        err_annotated,
+                        add_args=args_to_annotate,
+                        exclude_args=exclude_args,
+                        exclude_self=exclude_self,
+                        exclude_kwargs=exclude_kwargs,
+                        func=func,
+                        args=args,
+                        kwargs=kwargs,
                     )
                     intercept_err_and_log(
                         err,
                         err_raise=err_raise,
                         err_annotated=err_a,
                         log=log,
-                        log_obj=log_obj,
-                        log_level=log_level,
+                        level=level,
                         from_err=from_err,
                         source_func=func,
                     )
@@ -119,9 +135,8 @@ def raise_if_return(
     *,
     exception: Exception | type[Exception],
     err_msg_annotate: str | None = None,
-    log: Logger = MISSING,
-    log_obj: Logger = MISSING,
-    log_level: int = logging.ERROR,
+    log: Logger,
+    level: int = logging.ERROR,
     raise_by_type: tuple[type[Any], ...] = (str,),
     raise_by_none: bool = False,
 ) -> Callable[[F], F]:
@@ -139,11 +154,10 @@ def raise_if_return(
             Если передан класс исключения, текст добавится к результату функции:
             `f'{err_msg_annotate}: {result}'`. Если передан экземпляр — текст
             используется только для логирования.
-        log_level: Уровень логирования исключения.
+        level: Уровень логирования исключения.
         raise_by_type: Кортеж типов, при возврате которых возбуждается исключение.
             По умолчанию только строки (`str`) считаются ошибками.
         raise_by_none: Если True, возврат `None` также вызывает исключение.
-        log_obj: Устаревший аргумент. Используйте вместо него `log`.
 
     Returns:
         Декоратор для функции.
@@ -179,8 +193,7 @@ def raise_if_return(
                 err,
                 err_annotated=err_annotate,
                 log=log,
-                log_obj=log_obj,
-                log_level=log_level,
+                level=level,
                 source_func=func,
             )
 
@@ -216,10 +229,11 @@ def err_log_and_return(
     err_output: Any | None = None,
     err_annotated: str | None = None,
     args_to_annotate: bool = False,
-    exclude_args: Iterable[str] | None = None,
-    log: Logger = MISSING,
-    log_obj: Logger = MISSING,
-    log_level: int = logging.ERROR,
+    exclude_self: bool = True,
+    exclude_args: bool = False,
+    exclude_kwargs: Iterable[str] | None = None,
+    log: Logger,
+    level: int = logging.ERROR,
 ) -> Callable[[F], F]:
     """Декоратор, который перехватывает исключения, логирует их и возвращает
     заданное значение.
@@ -236,10 +250,15 @@ def err_log_and_return(
         log: Экземпляр логгера для записи исключения.
         err_output: Значение, возвращаемое функцией при возникновении исключения.
         err_annotated: Дополнительный текст к логу.
-        args_to_annotate: Если True, имена аргументов функции добавляются в лог.
-        exclude_args: Список аргументов, которые будут исключены из лога.
-        log_level: Уровень логирования исключения.
-        log_obj: Устаревший аргумент. Используйте вместо него `log`.
+        args_to_annotate: Если True, позиционные и именованные аргументы
+            декорируемой функции будут добавлены в лог для отладки.
+        exclude_self: Если True, атрибуты `self` и `cls` не добавляются в логи.
+            Применяется совместно с `args_to_annotate=True`.
+        exclude_args: Если True, все неименованные аргументы исключаются из логов.
+            Применяется совместно с `args_to_annotate=True`.
+        exclude_kwargs: Список именованных аргументов, которые нужно скрыть из лога.
+            Применяется совместно с `args_to_annotate=True`.
+        level: Уровень логирования исключения.
 
     Returns:
         Декоратор для функции.
@@ -260,11 +279,17 @@ def err_log_and_return(
                     log_err(
                         err,
                         err_annotated=err_annotated_msg(
-                            err_annotated, args_to_annotate, exclude_args, args, kwargs
+                            err_annotated,
+                            add_args=args_to_annotate,
+                            exclude_args=exclude_args,
+                            exclude_self=exclude_self,
+                            exclude_kwargs=exclude_kwargs,
+                            func=func,
+                            args=args,
+                            kwargs=kwargs,
                         ),
                         log=log,
-                        log_obj=log_obj,
-                        log_level=log_level,
+                        level=level,
                         source_func=func,
                     )
 
@@ -283,11 +308,17 @@ def err_log_and_return(
                     log_err(
                         err,
                         err_annotated=err_annotated_msg(
-                            err_annotated, args_to_annotate, exclude_args, args, kwargs
+                            err_annotated,
+                            add_args=args_to_annotate,
+                            exclude_args=exclude_args,
+                            exclude_self=exclude_self,
+                            exclude_kwargs=exclude_kwargs,
+                            func=func,
+                            args=args,
+                            kwargs=kwargs,
                         ),
                         log=log,
-                        log_obj=log_obj,
-                        log_level=log_level,
+                        level=level,
                         source_func=func,
                     )
 

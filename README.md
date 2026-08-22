@@ -1,23 +1,27 @@
 ![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg?style=for-the-badge)
-![Version](https://img.shields.io/badge/version-0.5.0-green.svg?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-0.6.0-green.svg?style=for-the-badge)
 
 # ehandlers
 
-Библиотека обработки исключений для Python-проектов, расширяющая стандартный модуль `logging`. Предоставляет декораторы
-и утилиты для структурированного логирования ошибок с полным контекстом.
+Библиотека обработки исключений для Python-проектов, расширяющая стандартный модуль
+`logging`. Предоставляет декораторы и утилиты для структурированного логирования ошибок
+с полным контекстом.
+
+Подробнее о `logging`
+в [документации Python](https://docs.python.org/3/library/logging.html).
 
 ## Особенности
 
-- **Универсальные декораторы** для синхронного и асинхронного кода
+- **Универсальные декораторы** для синхронного и асинхронного кода, а также могут
+  применяться для методов классов
 - **Гибкое логирование** с добавлением контекста выполнения
 - **Минимальные зависимости** — только стандартная библиотека Python
-- **Поддержка Django** и других веб-фреймворков
 - **Типизированные аннотации** для улучшенной поддержки IDE
 
 ## Установка
 
-### Github
+### GitHub
 
 ```shell
 pip install git+https://github.com/Shindler7/edhandlers.git 
@@ -48,22 +52,21 @@ def process_user_data(user_id: int) -> dict:
 
 ## Декораторы
 
-# Декораторы обработки ошибок
-
-| Что нужно?                                                             | Какой декоратор?      |
-|------------------------------------------------------------------------|-----------------------|
-| Ошибка должна быть залогирована, но программа должна упасть            | `@err_interceptor`    |
-| Ошибка допустима, нужно вернуть значение по умолчанию и записать в лог | `@err_log_and_return` |
-| Возврат определённого значения должен вызвать исключение (валидаторы)  | `@raise_if_return`    |
+| Что нужно?                                                            | Какой декоратор?                           |
+|-----------------------------------------------------------------------|--------------------------------------------|
+| Ошибку логировать и возбудить заново исключение                       | [@err_interceptor](#err_interceptor)       |
+| Логировать ошибку, а обёрнутый метод вернёт значение по умолчанию     | [@err_log_and_return](#err_log_and_return) |
+| Возврат определённого значения должен вызвать исключение (валидаторы) | [@raise_if_return](#raise_if_return)       |
 
 ### @err_interceptor
 
-Базовый декоратор для перехвата и логирования исключений с возможностью их повторного возбуждения.
+Базовый декоратор для перехвата и логирования исключений с возможностью их повторного
+возбуждения.
 
 ```python
 import logging
 
-from ehandlers.decorators import err_interceptor
+from ehandlers import err_interceptor
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +75,7 @@ logger = logging.getLogger(__name__)
     log=logger,
     err_annotated='Деление чисел',
     args_to_annotate=True,
-    log_level=logging.ERROR,
+    level=logging.ERROR,
 )
 def divide(a: float, b: float) -> float:
     """Выполняет деление a на b."""
@@ -84,12 +87,28 @@ def divide(a: float, b: float) -> float:
 - `log` — экземпляр логгера (обязательный)
 - `err_annotated` — дополнительное описание ошибки
 - `args_to_annotate` — логировать аргументы функции (по умолчанию `False`)
-- `log_level` — уровень логирования (по умолчанию `logging.ERROR`)
+- `exclude_self` — исключить из логирования аргументов `self` и `cls`, по умолчанию
+  `True` (применяется, если  `args_to_annotate=True`)
+- `exclude_args` — исключаются из логирования `args` (неименованные аргументы), по
+  умолчанию `False` (применяется, если  `args_to_annotate=True`)
+- `exclude_kwargs` — список именованных аргументов, которые не будут логированы
+  (актуально, если  `args_to_annotate=True`)
+- `level` — уровень логирования (по умолчанию `logging.ERROR`)
 - `err_raise` — исключение для повторного возбуждения (опционально)
 - `from_err` — сохранять оригинальный traceback (по умолчанию `True`)
 
-> _Изменено в версии 0.5.0_: на замену атрибута `log_obj` введён атрибут `log`. Будет
-> полностью исключён с версии `0.6.0`.
+> _Изменено в версии 0.6.0_:
+>   - `log_obj` исключён, вместо него применяется `log`
+>   - `log_level` переименован в `level`
+>   - функционал аргумента `exclude_args` перенесён в `exclude_kwargs`
+>   - обновлённый `exclude_args` теперь отвечает за логирование `args`
+
+#### Безопасность логирования аргументов
+
+> ⚠️При `args_to_annotate=True` в логи могут попасть чувствительные данные (`password`,
+> `token`, `api_key` и т.д.). Рекомендуется явно исключать их через `exclude_kwargs`.
+> Если секреты передаются позиционно, можно установить `exclude_args=True`, чтобы
+> исключить их из выдачи.
 
 ### @err_log_and_return
 
@@ -98,12 +117,14 @@ def divide(a: float, b: float) -> float:
 ```python
 import logging
 
-from ehandlers.decorators import err_log_and_return
+from typing import Any
+from ehandlers import err_log_and_return
 
 logger = logging.getLogger(__name__)
 
+CONFIG: dict[str, Any] = {}
 
-# noinspection PyUnresolvedReferences
+
 @err_log_and_return(
     log=logger,
     err_output={'status': 'error', 'message': 'Ошибка обработки'},
@@ -117,7 +138,8 @@ def get_config_value(key: str) -> Any:
 #### Параметры:
 
 - `err_output` — значение, возвращаемое при ошибке (по умолчанию `None`)
-- Другие параметры аналогичны `@err_interceptor`
+
+Другие параметры аналогичны [@err_interceptor](#err_interceptor).
 
 ### @raise_if_return
 
@@ -126,16 +148,18 @@ def get_config_value(key: str) -> Any:
 ```python
 import logging
 
-from ehandlers.decorators import raise_if_return
+from ehandlers import raise_if_return
 
 logger = logging.getLogger(__name__)
 
 
-# noinspection PyUnresolvedReferences
+class ValidationError(Exception):
+    pass
+
+
 @raise_if_return(
     exception=ValidationError,
     log=logger,
-    raise_by_type=(str,),
     err_msg_annotate='Валидация данных',
 )
 def validate_email(email: str) -> bool | str:
@@ -147,10 +171,11 @@ def validate_email(email: str) -> bool | str:
 
 #### Параметры:
 
+- `log` — экземпляр логгера (обязательный)
+- `level` — уровень логирования (по умолчанию `logging.ERROR`)
 - `exception` — исключение для возбуждения (обязательный)
-- `raise_by_type` — кортеж значений, вызывающих исключение (по умолчанию `str`)
-- raise_by_none — возбуждать исключение при возврате `None` (по умолчанию
-  `False`)
+- `raise_by_type` — кортеж значений, вызывающих исключение (по умолчанию `(str,)`)
+- `raise_by_none` — возбуждать исключение при возврате `None` (по умолчанию  `False`)
 - `err_msg_annotate` — дополнительное описание в логе
 
 ## Функции-обработчики
@@ -162,15 +187,18 @@ def validate_email(email: str) -> bool | str:
 Логирует исключение и возбуждает его повторно.
 
 ```python
+import json
 import logging
 
-from ehandlers.except_handlers.handlers import intercept_err_and_log
+from ehandlers import intercept_err_and_log
 
 logger = logging.getLogger(__name__)
 
+invalid_json: str = '{"name": "Ivan", "age": 30, "is_employee": true'
+
 try:
-    data = json.loads(invalid_json)  # noqa
-except json.JSONDecodeError as err:  # noqa
+    data = json.loads(invalid_json)
+except json.JSONDecodeError as err:
     intercept_err_and_log(err, log=logger, err_annotated='Парсинг JSON')
 ```
 
@@ -181,16 +209,23 @@ except json.JSONDecodeError as err:  # noqa
 ```python
 import logging
 
-from ehandlers.except_handlers.handlers import raise_err_and_log
+from ehandlers import raise_err_and_log
 
 logger = logging.getLogger(__name__)
 
-if not user.is_authenticated:  # noqa
+
+class User:
+    is_authenticated: bool = False
+
+
+user = User()
+
+if not user.is_authenticated:
     raise_err_and_log(
         PermissionError,
         err_message='Пользователь не аутентифицирован',
         log=logger,
-        log_level=logging.WARNING,
+        level=logging.WARNING,
     )
 ```
 
@@ -201,116 +236,43 @@ if not user.is_authenticated:  # noqa
 ```python
 import logging
 
-from ehandlers.except_handlers.handlers import log_err
+from ehandlers import log_err
 
 logger = logging.getLogger(__name__)
 
+
+class DatabaseError(Exception):
+    pass
+
+
+class Database:
+    def save(self) -> None:
+        raise DatabaseError('Отсутствует доступ к базе данных.')
+
+
 try:
-    db_record.save()  # noqa
-except DatabaseError as err:  # noqa
+    db = Database()
+    db.save()
+except DatabaseError as err:
     log_err(err, log=logger)
 # Продолжаем выполнение...
 ```
 
 ## Асинхронная поддержка
 
-Все декораторы полностью поддерживают асинхронные функции и методы.
-
-```python
-# noinspection PyUnresolvedReferences
-@err_interceptor(log=logger)
-async def fetch_data(url: str) -> dict:
-    """Асинхронное получение данных."""
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as response:
-            return await response.json()
-```
-
-## 📖 Примеры использования
-
-### Django
-
-```python
-# noinspection PyUnresolvedReferences
-async def news_to_file(news: dict):
-    """Сохранить новости в файл."""
-
-    try:
-        await files.write_json_async(configurate.NEWS_JSON_FULLPATH, news)
-    except OSError as err:
-        intercept_err_and_log(err, log=logger)  # noqa
-```
-
-### FastAPI/Starlette
-
-```python
-from fastapi import FastAPI, HTTPException  # noqa
-
-from ehandlers.decorators import err_interceptor
-
-app = FastAPI()
-
-
-@app.get('/items/{item_id}')
-@err_interceptor(
-    log=logger,  # noqa
-    err_raise=HTTPException(status_code=500, detail='Внутренняя ошибка'),
-)
-async def read_item(_item_id: int):
-    print('Логика обработки...')
-```
+Все декораторы поддерживают асинхронные функции и методы.
 
 ## Тесты
 
 При поддержке `pytest` собраны тесты для проверки функциональности.
 
-```pycon
+```shell
 python -m pytest
 ```
 
 ## История версий
 
-### [0.5.0] — 18.08.2026
-
-- В декораторах и методах добавлен атрибут `log` для будущей замены `log_obj`.
-- Оптимизирован процесс вычисления имени функции, где выбросилось исключение.
-- Удалён метод `raise_type` — плохая практика сложного раскрытия типов исключений.
-- Повышена поддерживаемая версия `Python`: 3.12+.
-- Улучшение кода на основе замечаний `ruff`, без изменения функциональности.
-
-### [0.4.2] — 24.07.2026
-
-- Исправлена опечатка в `setup.py` в ссылке на репозиторий проекта.
-
-### [0.4.1] — 25.04.2026
-
-- Добавлен аргумент `exclude_args` для аргумента `args_to_annotate`, что позволяет исключить отдельные аргументы функций
-  из выдачи в логи.
-- Улучшена обработка типов данных.
-
-### [0.4.0] — 25.01.2026
-
-- Исправлены ошибки при обработке асинхронных методов.
-- Улучшена поддержка типизации для IDE.
-- Оптимизирована производительность декораторов.
-
-### [0.3.3]
-
-- Добавлена поддержка асинхронных функций.
-- Расширена документация с примерами использования.
-- Улучшена обработка контекста исключений.
-
-### [0.3.2b]
-
-- Обновлена структура пакета.
-- Добавлены тесты для основных сценариев.
-- Улучшена совместимость с Python 3.11+.
-
-### [0.1b]
-
-- Первый публичный релиз.
-- Базовые декораторы и обработчики.
-- Поддержка синхронного кода.
+См. файл [CHANGELOG.md](CHANGELOG.md).
 
 ## Вклад в проект
 

@@ -18,7 +18,7 @@ setup(
     version=ehandlers.__version__,
     author=ehandlers.__author__,
     author_email=ehandlers.__email__,
-    packages=find_packages(),
+    packages=find_packages(exclude=('tests', 'tests.*', 'docs', 'examples')),
     install_requires=read_file(REQUIREMENTS).splitlines(),
     description='Структурированная обработка исключений с логированием',
     long_description=read_file(README),

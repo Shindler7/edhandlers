@@ -2,10 +2,13 @@
 Подготовка сообщений для логирования исключений.
 """
 
-from collections.abc import Iterable, Mapping
+import inspect
+from collections.abc import Callable, Iterable, Mapping
+from functools import cache
+from inspect import Signature
 from typing import Any
 
-from ehandlers.except_handlers.tools import is_exc_instance, is_exc_type
+from .tools import is_exc_instance, is_exc_type
 
 
 def get_simple_or_annotated(
@@ -88,10 +91,24 @@ def annotated_msg_err(
     return f'[{func_name}] {err_annotated}: {get_err_str(err)}'
 
 
+@cache
+def _safe_signature(func: Callable[..., Any]) -> inspect.Signature | None:
+    """Безопасно извлекает и кэширует сигнатуру функции."""
+
+    try:
+        return inspect.signature(inspect.unwrap(func))
+    except (TypeError, ValueError):
+        return None
+
+
 def err_annotated_msg(
-    err_a: str | None,
+    annotation: str | None,
+    *,
     add_args: bool,
-    exclude_args: Iterable[str] | None,
+    exclude_args: bool,
+    exclude_self: bool,
+    exclude_kwargs: Iterable[str] | None,
+    func: Callable[..., Any],
     args: tuple[Any, ...],
     kwargs: Mapping[str, Any],
 ) -> str | None:
@@ -104,33 +121,58 @@ def err_annotated_msg(
         Аргументы вносятся в логи "как есть".
 
     Args:
-        err_a: Базовое сообщение аннотации.
+        annotation: Базовое сообщение аннотации.
         add_args: Флаг добавления аргументов функции к аннотации.
-        exclude_args: Перечисленные именованные аргументы, которые будут
-            исключены из выдачи, если используется `add_args`.
-        *args: Позиционные аргументы вызванной функции.
-        **kwargs: Именованные аргументы вызванной функции.
+        exclude_self: Если True, атрибуты `self` и `cls` не добавляются в логи, если
+            включен параметр `args_to_annotate`.
+        exclude_args: Если True, будут исключены все неименованные аргументы.
+        exclude_kwargs: Перечисленные именованные аргументы, которые будут исключены
+            из выдачи, если используется `add_args`.
+        func: Указатель на декорированную функцию.
+        args: Позиционные аргументы вызванной функции.
+        kwargs: Именованные аргументы вызванной функции.
 
     Returns:
         None, если нет `err_a` и `add_args=False`, в ином случае оформленная строка.
     """
 
     if not add_args:
-        return err_a
+        return annotation
 
-    args_repr: str = repr(args) if args else '()'
+    cached_sig: Signature | None = _safe_signature(func)  # type: ignore[arg-type]
+    excluded: set[str] = set(exclude_kwargs or ())
+    args_info: str = 'args=() kwargs={}'
 
-    # Kwargs требует более детальной обработки.
-    if kwargs:
-        excluded: set[str] = set(exclude_args or ())
-        valid_kwargs = {k: v for k, v in kwargs.items() if k not in excluded}
-        kwargs_repr: str = repr(valid_kwargs)
-    else:
-        kwargs_repr: str = '{}'
+    if cached_sig is not None:
+        try:
+            bound = cached_sig.bind(*args, **kwargs)
+            bound.apply_defaults()
+            arguments = bound.arguments
 
-    args_info = f'args={args_repr}, kwargs={kwargs_repr}'
+            if exclude_args:
+                arguments.pop('args', None)
 
-    if err_a:
-        return f'{err_a} | {args_info}'
+            if exclude_self:
+                arguments.pop('self', None)
+                arguments.pop('cls', None)
 
-    return args_info
+            if exclude_kwargs:
+                for key in set(exclude_kwargs or ()):
+                    arguments.pop(key, None)
+
+            args_info = ', '.join(f'{k}={v!r}' for k, v in arguments.items())
+            args_info: str = f'context=({args_info})' if args_info else 'context=()'
+
+        except (TypeError, ValueError):
+            cached_sig = None
+
+    if cached_sig is None:
+        # Args.
+        clean_args: tuple[Any, ...] = () if exclude_args else args
+        # Kwargs.
+        excluded: set[str] = set(exclude_kwargs or ())
+        clean_kwargs = {k: v for k, v in kwargs.items() if k not in excluded}
+
+        args_info: str = f'args={clean_args!r}, kwargs={clean_kwargs!r}'
+
+    return f'{annotation} | {args_info}' if annotation else args_info

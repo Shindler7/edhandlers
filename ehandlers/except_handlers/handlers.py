@@ -35,7 +35,6 @@ except KeyError as e:
 import logging
 import os
 import traceback
-import warnings
 from collections.abc import Callable
 from logging import Logger
 from traceback import StackSummary
@@ -47,17 +46,14 @@ from .tools import is_exc_type
 _LIB_DIR_NAME: str = 'ehandlers'
 """Название директории с кодом библиотеки."""
 
-MISSING = object()
-
 
 def intercept_err_and_log(
     err: Exception,
     *,
     err_annotated: str | None = None,
     err_raise: Exception | type[Exception] | None = None,
-    log: Logger = MISSING,
-    log_obj: Logger = MISSING,
-    log_level: int = logging.ERROR,
+    log: Logger,
+    level: int = logging.ERROR,
     from_err: bool = True,
     source_func: Callable | str | None = None,
     **log_kwargs: Any,
@@ -77,9 +73,7 @@ def intercept_err_and_log(
             передавать логгер текущего модуля.
         log: Экземпляр логгера для записи исключения
             (обязательный). Рекомендуется передавать логгер текущего модуля.
-        log_obj: Устаревший аргумент. Используйте вместо
-            него `log`. Будет удален в будущих версиях.
-        log_level: Уровень логирования. По умолчанию: `logging.ERROR`.
+        level: Уровень логирования. По умолчанию: `logging.ERROR`.
         from_err: Если `True` и указан `err_raise`, сохраняет цепочку
             исключений: `raise new_err from old_err`. Полезно для отладки,
             чтобы видеть оригинальную причину.
@@ -96,8 +90,7 @@ def intercept_err_and_log(
         err,
         err_annotated=err_annotated,
         log=log,
-        log_obj=log_obj,
-        log_level=log_level,
+        level=level,
         source_func=source_func,
         **log_kwargs,
     )
@@ -110,9 +103,8 @@ def raise_err_and_log(
     *,
     err_message: str | None = None,
     err_annotated: str | None = None,
-    log: Logger = MISSING,
-    log_obj: Logger = MISSING,
-    log_level: int = logging.ERROR,
+    log: Logger,
+    level: int = logging.ERROR,
     source_func: Callable | str | None = None,
 ) -> NoReturn:
     """Создаёт, логирует и возбуждает исключение.
@@ -128,9 +120,7 @@ def raise_err_and_log(
             Пример: `"Ошибка валидации пользователя"`.
         log: Экземпляр логгера для записи исключения (обязательный).
             Рекомендуется передавать логгер текущего модуля.
-        log_obj: Устаревший аргумент. Используйте вместо
-            него `log`. Будет удален в будущих версиях.
-        log_level: Уровень логирования. По умолчанию: `logging.ERROR`.
+        level: Уровень логирования. По умолчанию: `logging.ERROR`.
         source_func: Функция, в которой произошла ошибка.
             Если не указано, имя определяется автоматически через `traceback`.
 
@@ -138,14 +128,18 @@ def raise_err_and_log(
         Exception: Возбуждает переданное или созданное исключение `err`.
     """
 
-    exc_err = (err(err_message) if err_message else err()) if is_exc_type(err) else err
+    if is_exc_type(err):
+        exc_err = err(err_message) if err_message is not None else err()
+    elif isinstance(err, Exception):
+        exc_err = err
+    else:
+        raise TypeError('`err` должен быть классом или экземпляром Exception')
 
     log_err(
         exc_err,
         err_annotated=err_annotated,
         log=log,
-        log_obj=log_obj,
-        log_level=log_level,
+        level=level,
         source_func=source_func,
     )
 
@@ -156,9 +150,8 @@ def log_err(
     err_to_log: Exception | type[Exception] | str,
     *,
     err_annotated: str | None = None,
-    log: Logger = MISSING,
-    log_obj: Logger = MISSING,
-    log_level: int = logging.ERROR,
+    log: Logger,
+    level: int = logging.ERROR,
     source_func: Callable | str | None = None,
     **log_kwargs: Any,
 ) -> None:
@@ -173,25 +166,15 @@ def log_err(
         err_annotated: Дополнительный текст, уточняющий контекст ошибки.
         log: Экземпляр логгера для записи исключения (обязательный).
             Рекомендуется передавать логгер текущего модуля.
-        log_obj: Устаревший аргумент. Используйте вместо него `log`.
-            Будет удален в будущих версиях.
-        log_level: Уровень логирования из модуля `logging`. По умолчанию:
+        level: Уровень логирования из модуля `logging`. По умолчанию:
             `logging.ERROR`.
         source_func: Функция, в которой произошла ошибка. Если не указано,
             имя определяется автоматически через `traceback`.
         log_kwargs: Дополнительные аргументы для логгера.
     """
 
-    if log_obj is not MISSING:
-        warnings.warn(
-            'Аргумент `log_obj` устарел и будет удалён в версии `0.6.0`. '
-            'Используйте `log`.',
-            DeprecationWarning,
-            stacklevel=2,
-        )
-
     # Логгер ожидается из атрибута `log`.
-    log_obj: Any = log if isinstance(log, Logger) else log_obj
+    log_obj: Any = log
 
     # Выявляем вид информации об ошибке (исключении).
     if isinstance(err_to_log, (Exception, str)):
@@ -227,7 +210,7 @@ def log_err(
     err_msg: str = get_simple_or_annotated(err_to_log, func_name, err_annotated)
 
     # Записываем в логи результат.
-    log_obj.log(log_level, err_msg, **log_kwargs)
+    log_obj.log(level, err_msg, **log_kwargs)
 
 
 def raise_except(
