@@ -141,38 +141,94 @@ def err_annotated_msg(
 
     cached_sig: Signature | None = _safe_signature(func)  # type: ignore[arg-type]
     excluded: set[str] = set(exclude_kwargs or ())
-    args_info: str = 'args=() kwargs={}'
+    args_info: str | None = None
 
+    # 1) Основной путь: полная привязка; 2) fallback привязки: partial.
     if cached_sig is not None:
-        try:
-            bound = cached_sig.bind(*args, **kwargs)
-            bound.apply_defaults()
-            arguments = bound.arguments
+        binder: Callable
+        for binder in (cached_sig.bind, cached_sig.bind_partial):
+            try:
+                bound = binder(*args, **kwargs)
+                bound.apply_defaults()
+                arguments = dict(bound.arguments)
 
-            if exclude_args:
-                arguments.pop('args', None)
+                if exclude_args:
+                    # Убираем *args независимо от имени параметра.
+                    for name, param in cached_sig.parameters.items():
+                        if param.kind == inspect.Parameter.VAR_POSITIONAL:
+                            arguments.pop(name, None)
 
-            if exclude_self:
-                arguments.pop('self', None)
-                arguments.pop('cls', None)
+                if exclude_self:
+                    arguments.pop('self', None)
+                    arguments.pop('cls', None)
 
-            if exclude_kwargs:
-                for key in set(exclude_kwargs or ()):
+                for key in excluded:
                     arguments.pop(key, None)
 
-            args_info = ', '.join(f'{k}={v!r}' for k, v in arguments.items())
-            args_info: str = f'context=({args_info})' if args_info else 'context=()'
+                context = ', '.join(f'{k}={v!r}' for k, v in arguments.items())
+                args_info = f'context=({context})' if context else 'context=()'
+                break
+            except (TypeError, ValueError):
+                continue
 
-        except (TypeError, ValueError):
-            cached_sig = None
+    # Безопасный fallback.
+    if args_info is None:
+        clean_kwargs = dict(kwargs)
+        if exclude_self:
+            clean_kwargs.pop('self', None)
+            clean_kwargs.pop('cls', None)
+        for key in excluded:
+            clean_kwargs.pop(key, None)
 
-    if cached_sig is None:
-        # Args.
-        clean_args: tuple[Any, ...] = () if exclude_args else args
-        # Kwargs.
-        excluded: set[str] = set(exclude_kwargs or ())
-        clean_kwargs = {k: v for k, v in kwargs.items() if k not in excluded}
+        if exclude_args:
+            args_repr = '()'
+        elif exclude_self:
+            # Гарантированно отделить `self/cls` из positional args нельзя.
+            args_repr = '<unbound>'
+        else:
+            args_repr = repr(args)
 
-        args_info: str = f'args={clean_args!r}, kwargs={clean_kwargs!r}'
+        args_info: str = f'args={args_repr}, kwargs={clean_kwargs!r}'
 
     return f'{annotation} | {args_info}' if annotation else args_info
+
+    # if not add_args:
+    #     return annotation
+    #
+    # cached_sig: Signature | None = _safe_signature(func)  # type: ignore[arg-type]
+    # excluded: set[str] = set(exclude_kwargs or ())
+    # args_info: str = 'args=() kwargs={}'
+    #
+    # if cached_sig is not None:
+    #     try:
+    #         bound = cached_sig.bind(*args, **kwargs)
+    #         bound.apply_defaults()
+    #         arguments = bound.arguments
+    #
+    #         if exclude_args:
+    #             arguments.pop('args', None)
+    #
+    #         if exclude_self:
+    #             arguments.pop('self', None)
+    #             arguments.pop('cls', None)
+    #
+    #         if exclude_kwargs:
+    #             for key in set(exclude_kwargs or ()):
+    #                 arguments.pop(key, None)
+    #
+    #         args_info = ', '.join(f'{k}={v!r}' for k, v in arguments.items())
+    #         args_info: str = f'context=({args_info})' if args_info else 'context=()'
+    #
+    #     except (TypeError, ValueError):
+    #         cached_sig = None
+    #
+    # if cached_sig is None:
+    #     # Args.
+    #     clean_args: tuple[Any, ...] = () if exclude_args else args
+    #     # Kwargs.
+    #     excluded: set[str] = set(exclude_kwargs or ())
+    #     clean_kwargs = {k: v for k, v in kwargs.items() if k not in excluded}
+    #
+    #     args_info: str = f'args={clean_args!r}, kwargs={clean_kwargs!r}'
+    #
+    # return f'{annotation} | {args_info}' if annotation else args_info
